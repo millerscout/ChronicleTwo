@@ -5,3 +5,9 @@ void PortDrawQuickChangeBanner();
 
 // Drops a banner still showing, as a mode change and its loading screen begin.
 void PortCancelQuickChangeBanner();
+
+// Plays the effect on the character a quick change switched to: a fade from white and a splash of stars.
+void PortStepQuickChangeEffect();
+
+// Whether the last quick change is still playing its effect; no new quick change starts until it ends.
+bool PortQuickChangeCoolingDown();
