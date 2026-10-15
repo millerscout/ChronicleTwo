@@ -150,7 +150,8 @@ TEST(PcOptions, HitTestingUsesVisibleRowsAndHasNoDeadRowsOrOutOfBoundsHits) {
     EXPECT_EQ(options::HitTest(state, 440, 120).kind, options::HitKind::None);
     EXPECT_EQ(options::HitTest(state, 84, 352).kind, options::HitKind::Back);
     options::SelectPage(state, 1);
-    EXPECT_EQ(options::HitTest(state, 300, 180).kind, options::HitKind::None);
+    // Gap between the tab strip (bottom 114) and the first row (top 120).
+    EXPECT_EQ(options::HitTest(state, 300, 117).kind, options::HitKind::None);
     options::SelectPage(state, 3);
     state.first[3] = 7;
     EXPECT_EQ(options::HitTest(state, 300, 120).index, 7);

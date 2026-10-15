@@ -519,6 +519,7 @@ TEST_F(SaveSlotTest, DurableSaveRemainsSuccessfulWhenPostWriteScanFails) {
     manager.GetAllSaveFileInfo();
     // The catalog was readable at selection; an unrelated legacy-card root
     // becomes unreadable before the confirmed overwrite is published.
+    fs::remove_all(root / "mc1");
     std::ofstream(root / "mc1") << "occupied";
     live->map_no = 21;
     SaveSlotNew = false;
