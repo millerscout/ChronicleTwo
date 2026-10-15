@@ -29,6 +29,7 @@
 #include "present.hpp"
 #include "sce/threads.hpp"
 #include "sound_port.hpp"
+#include "bench_spawn.hpp"
 #include "test_hooks.hpp"
 
 // The audio branch adds audio_init.hpp; until it lands the port builds without audio.
@@ -60,6 +61,9 @@ struct Options {
     bool                  screenshot_fps = false;
     std::filesystem::path screenshot;
     std::filesystem::path input;
+    int                   bench_spawn_enemies = 0;
+    int                   bench_spawn_monster = 0;
+    int                   bench_spawn_after_vsync = 2800;
 };
 
 Options g_options;
@@ -72,6 +76,8 @@ Options g_options;
                  "  --jump MODE[:ARG]  start in town:<map>, dungeon:<n>[:<floor>], event:<id>, title, opening, menu (DC2_JUMP)\n"
                  "  --fast-load        shorten loading-screen holds (DC2_FAST_LOAD=1)\n"
                  "  --give ITEM,...    give missing items and weapons on arrival (DC2_GIVE)\n"
+                 "  --bench-spawn-enemies N[:MONSTER_ID[:VSYNC]]  dungeon bench: spawn N monsters near player\n"
+                 "                     (capped at 24 or 60 with Expanded dungeon monsters; default monster 0, vsync 2800)\n"
                  "  --run-dir DIR      game root containing data/, port_data/ and saves/\n"
                  "                     (default: the per-user chronicletwo app data directory)\n"
                  "  --data DIR         override the extracted data/ subdirectory (DC2_DATA)\n"
@@ -155,6 +161,25 @@ Options ParseOptions(int argc, const char **argv) {
             options.screenshot_display = ParsePositive(OptionValue(argc, argv, i), argv[0]);
         } else if (arg == "--screenshot-fps") {
             options.screenshot_fps = true;
+        } else if (arg == "--bench-spawn-enemies") {
+            const std::string_view value = OptionValue(argc, argv, i);
+            auto                   first = value.find(':');
+            auto                   second = value.find(':', first == value.npos ? value.npos : first + 1);
+            options.bench_spawn_enemies = ParsePositive(value.substr(0, first), argv[0]);
+            if (first != value.npos) {
+                const std::string_view monster_text =
+                    second == value.npos ? value.substr(first + 1) : value.substr(first + 1, second - first - 1);
+                int monster = 0;
+                const char *last = monster_text.data() + monster_text.size();
+                const auto [end, ec] = std::from_chars(monster_text.data(), last, monster);
+                if (ec != std::errc() || end != last || monster < 0) {
+                    Usage(argv[0]);
+                }
+                options.bench_spawn_monster = monster;
+            }
+            if (second != value.npos) {
+                options.bench_spawn_after_vsync = ParsePositive(value.substr(second + 1), argv[0]);
+            }
         } else if (arg == "--input") {
             options.input = PathsFromUtf8(OptionValue(argc, argv, i));
             if (options.input.empty()) {
@@ -209,6 +234,9 @@ PresentSettings PresentSettingsFor(const Config &config, const Options &options)
         .show_fps = options.show_fps || (config.show_fps && !options.headless),
         .fps_detail = config.fps_detail,
         .log_fps = options.log_fps,
+        .interpolation_draw_budget = config.interpolation_draw_budget,
+        .interpolation_fps_floor = config.interpolation_fps_floor,
+        .interpolation_multi_present = config.interpolation_multi_present,
     };
 }
 
@@ -258,6 +286,10 @@ int Run(int argc, const char **argv) {
     }
     const char *fast = SettingsEnv("FAST_LOAD");
     GameSetFastLoad(options.fast_load || (fast && *fast && *fast != '0'));
+    if (options.bench_spawn_enemies > 0) {
+        GameSetBenchSpawnEnemies(options.bench_spawn_enemies, options.bench_spawn_monster,
+                                 options.bench_spawn_after_vsync);
+    }
     InputScript   input_script;
     if (!options.input.empty()) {
         std::string error;

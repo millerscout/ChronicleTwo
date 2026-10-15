@@ -21,6 +21,16 @@ const options::Row &Find(std::string_view key) {
 }
 } // namespace
 
+TEST(PcOptions, GameHostBoolsDefaultToOffInOverlay) {
+    const Config defaults;
+    EXPECT_FALSE(defaults.debug_mode);
+    EXPECT_FALSE(defaults.skip_intro);
+    EXPECT_EQ(Find("game.debug_mode").value(defaults), "Off");
+    EXPECT_EQ(Find("game.skip_intro").value(defaults), "Off");
+    EXPECT_EQ(defaults.georama_poly_multiplier, 1);
+    EXPECT_EQ(Find("game.georama_poly_multiplier").value(defaults), "1×");
+}
+
 TEST(PcOptions, RequestedSettingsHaveUniqueRowsAndRoundTripTheirEdits) {
     const std::set<std::string> required{
         "video.fullscreen",
@@ -28,6 +38,7 @@ TEST(PcOptions, RequestedSettingsHaveUniqueRowsAndRoundTripTheirEdits) {
         "video.present_mode",
         "video.max_fps",
         "video.interpolation",
+        "video.interpolation_draw_budget",
         "video.aspect",
         "video.ui_scale",
         "video.show_fps",
@@ -45,6 +56,10 @@ TEST(PcOptions, RequestedSettingsHaveUniqueRowsAndRoundTripTheirEdits) {
         "input.stick_invert_y",
         "input.glyphs",
         "input.glyph_device",
+        "game.debug_mode",
+        "game.skip_intro",
+        "game.georama_poly_multiplier",
+        "game.expanded_dungeon_monsters",
     };
     std::set<std::string> actual;
     for (const auto &page : options::Pages()) {
@@ -58,7 +73,9 @@ TEST(PcOptions, RequestedSettingsHaveUniqueRowsAndRoundTripTheirEdits) {
             ASSERT_TRUE(options::StepRow(row, config, 1) || options::StepRow(row, config, -1)) << row.key;
             EXPECT_NE(config, Config{}) << row.key;
             EXPECT_EQ(ConfigParse(ConfigSerialize(config)), config) << row.key;
-            EXPECT_FALSE(config.debug_mode);
+            if (row.key != "game.debug_mode") {
+                EXPECT_FALSE(config.debug_mode);
+            }
             EXPECT_DOUBLE_EQ(config.tick_rate, 60);
         }
     }
@@ -150,7 +167,7 @@ TEST(PcOptions, HitTestingUsesVisibleRowsAndHasNoDeadRowsOrOutOfBoundsHits) {
     EXPECT_EQ(options::HitTest(state, 440, 120).kind, options::HitKind::None);
     EXPECT_EQ(options::HitTest(state, 84, 352).kind, options::HitKind::Back);
     options::SelectPage(state, 1);
-    EXPECT_EQ(options::HitTest(state, 300, 180).kind, options::HitKind::None);
+    EXPECT_EQ(options::HitTest(state, 300, 117).kind, options::HitKind::None);
     options::SelectPage(state, 3);
     state.first[3] = 7;
     EXPECT_EQ(options::HitTest(state, 300, 120).index, 7);

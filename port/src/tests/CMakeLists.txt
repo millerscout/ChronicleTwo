@@ -74,6 +74,7 @@ set(CT_GPU_TESTS
     MglibPresent.*
     MglibSeam.*
     MgVisual.*
+    VisualMeshCache.*
     ScreenEffect.*
     MgShadow.*
     Water.*

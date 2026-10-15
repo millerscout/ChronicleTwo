@@ -10,15 +10,23 @@ namespace options {
 constexpr int kVisibleRows = 8;
 constexpr int kRowY = 120;
 constexpr int kRowStep = 24;
-constexpr int kLeft = 82;
-constexpr int kRight = 434;
+// Match option.cfg mnwinback (90..422). Interactive layout stops before mnwin5 at 408.
+constexpr int kLeft = 90;
+constexpr int kRight = 408;
+constexpr int kInnerRight = 422;
+constexpr int kOverlayBottom = 460;
 constexpr int kValueX = 288;
+constexpr int kMaxPages = 8;
+
+inline int TabStep(int page_count) {
+    return page_count > 0 ? (kRight - kLeft) / page_count : 0;
+}
 
 struct State {
-    bool               open = false;
-    int                page = 0;
-    std::array<int, 4> row{};
-    std::array<int, 4> first{};
+    bool                    open = false;
+    int                     page = 0;
+    std::array<int, kMaxPages> row{};
+    std::array<int, kMaxPages> first{};
     int                binding = -1;
     bool               save_failed = false;
 };
