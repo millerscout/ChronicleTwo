@@ -21,6 +21,9 @@ extern u_long128     PortSystemSeBuff[400] asm("MainLoop_SystemSeBuff");
 extern u_long128     PortInfoBuff[5000] asm("MainLoop_InfoBuff");
 void                 PortInitPadTable(int language) asm("MainLoop_InitPadTable");
 
+// Whether arriving in a town map or on a dungeon floor overwrites the autosave; off for test runs.
+extern bool PortAutosave;
+
 class CScene;
 /**
  * Saves town edits and releases the active town's event, sub-game and audio state.

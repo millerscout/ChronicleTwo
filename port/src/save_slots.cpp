@@ -31,6 +31,9 @@ namespace fs = std::filesystem;
 
 SaveSlotList SaveSlots;
 bool         SaveSlotNew = false;
+bool         SaveSlotListAutosave = true;
+bool          SaveSlotSpawnPending = false;
+AutosaveSpawn SaveSlotSpawn;
 
 namespace {
 constexpr char     kPrefix[] = "BESCES-51190dkcl";
@@ -291,6 +294,10 @@ fs::path SaveSlotPath(int number, bool second_card) {
     return SaveSlotsRoot() / (std::string(kPrefix) + std::to_string(number) + (second_card ? kSecondCard : ""));
 }
 
+fs::path SaveSlotAutosavePath() { return SaveSlotsRoot() / "autosave"; }
+
+fs::path SaveSlotAutosaveSpawnPath() { return SaveSlotsRoot() / "autosave.spawn"; }
+
 int SaveSlotNumber(const std::string &name, bool &second_card) {
     std::string_view text(name);
     second_card = text.ends_with(kSecondCard);
@@ -476,6 +483,18 @@ SaveSlotList SaveSlotScan() {
         entries[key] = source;
     }
     std::set<fs::path> seen;
+    if (SaveSlotListAutosave) {
+        SaveSlot slot;
+        slot.number = -1;
+        slot.autosave = true;
+        slot.path = SaveSlotAutosavePath();
+        seen.insert(slot.path);
+        slot.state = CachedInfo(slot.path, slot.info);
+        if (slot.state != SaveSlotState::Unreadable) {
+            slot.info.file_no = slot.number;
+            list.saves.push_back(slot);
+        }
+    }
     for (const auto &[key, path] : entries) {
         SaveSlot slot;
         slot.number = key.first;
