@@ -2,6 +2,7 @@
 #include "common.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -24,6 +25,7 @@
 #include "mg_drawprim_port.hpp"
 #include "mg_math.hpp"
 #include "mg_texture_port.hpp"
+#include "mg_visual_port.hpp"
 #include "mglib.hpp"
 #include "mglib_port.hpp"
 #include "platform/clock.hpp"
@@ -1324,6 +1326,7 @@ PORT_OVERRIDE void mgBeginPacket(mgCDrawManager *manager) {
 }
 
 PORT_OVERRIDE void mgEndFrame(mgCDrawManager *manager) {
+    PresentFrameBudgetTickBegin();
     bool queued[4] = {};
 
     for (int slot = 0; slot < 4; ++slot) {
@@ -1350,7 +1353,11 @@ PORT_OVERRIDE void mgEndFrame(mgCDrawManager *manager) {
         recording = false;
 
         if (list) {
+            const auto canonical_start = std::chrono::steady_clock::now();
             gfx::RenderList(*list, 1.0f, gfx::RenderOptions{.canonical = true});
+            const double canonical_seconds =
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - canonical_start).count();
+            PresentFrameBudgetAddCanonical(canonical_seconds);
         }
 
         previous_list = std::move(last_list);
@@ -1374,6 +1381,7 @@ PORT_OVERRIDE void mgEndFrame(mgCDrawManager *manager) {
 
     depth_next = kFirstAllocatedDepthSlot;
     frame_open = false;
+    mgVisualPortSweep();
     ++frame_count;
 
     if (exit_frames > 0 && frame_count == exit_frames) {
@@ -1408,6 +1416,7 @@ PORT_OVERRIDE void mgEndFrame(mgCDrawManager *manager) {
     PresentWaitFrame(old_vcount, mgFrameRate);
     old_vcount = mgGetVSyncCount();
     PresentTickEnd();
+    PresentFrameBudgetTickCommit();
     mgNowFrameRate = mgTimeFrameFields();
 
     if (!(mgNowFrameRate - (float) mgFrameRate <= 1.0f)) {

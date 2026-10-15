@@ -4,6 +4,7 @@
 #include <set>
 #include <string>
 
+#include "options/registry.hpp"
 #include "options/rows.hpp"
 #include "options/screen.hpp"
 #include "platform/input.hpp"
@@ -21,6 +22,16 @@ const options::Row &Find(std::string_view key) {
 }
 } // namespace
 
+TEST(PcOptions, GameHostBoolsDefaultToOffInOverlay) {
+    const Config defaults;
+    EXPECT_FALSE(defaults.debug_mode);
+    EXPECT_FALSE(defaults.skip_intro);
+    EXPECT_EQ(Find("game.debug_mode").value(defaults), "Off");
+    EXPECT_EQ(Find("game.skip_intro").value(defaults), "Off");
+    EXPECT_EQ(defaults.georama_poly_multiplier, 1);
+    EXPECT_EQ(Find("game.georama_poly_multiplier").value(defaults), "1×");
+}
+
 TEST(PcOptions, RequestedSettingsHaveUniqueRowsAndRoundTripTheirEdits) {
     const std::set<std::string> required{
         "video.fullscreen",
@@ -28,6 +39,7 @@ TEST(PcOptions, RequestedSettingsHaveUniqueRowsAndRoundTripTheirEdits) {
         "video.present_mode",
         "video.max_fps",
         "video.interpolation",
+        "video.interpolation_draw_budget",
         "video.aspect",
         "video.ui_scale",
         "video.show_fps",
@@ -46,6 +58,10 @@ TEST(PcOptions, RequestedSettingsHaveUniqueRowsAndRoundTripTheirEdits) {
         "input.glyphs",
         "input.glyph_device",
         "game.autosave",
+        "game.debug_mode",
+        "game.skip_intro",
+        "game.georama_poly_multiplier",
+        "game.expanded_dungeon_monsters",
     };
     std::set<std::string> actual;
     for (const auto &page : options::Pages()) {
@@ -59,7 +75,9 @@ TEST(PcOptions, RequestedSettingsHaveUniqueRowsAndRoundTripTheirEdits) {
             ASSERT_TRUE(options::StepRow(row, config, 1) || options::StepRow(row, config, -1)) << row.key;
             EXPECT_NE(config, Config{}) << row.key;
             EXPECT_EQ(ConfigParse(ConfigSerialize(config)), config) << row.key;
-            EXPECT_FALSE(config.debug_mode);
+            if (row.key != "game.debug_mode") {
+                EXPECT_FALSE(config.debug_mode);
+            }
             EXPECT_DOUBLE_EQ(config.tick_rate, 60);
         }
     }
@@ -282,7 +300,7 @@ TEST(PcOptions, ZoomResetHasAVisibleRebindableRow) {
 }
 
 TEST(PcOptions, TimingRowIsAbsentAndOtherSettingsRemain) {
-    EXPECT_EQ(options::Pages().size(), static_cast<std::size_t>(options::kPages));
+    EXPECT_EQ(options::Pages().size(), static_cast<std::size_t>(port_settings::PcOverlayPageCount()));
     for (const auto &page : options::Pages()) {
         for (const auto &row : page.rows) {
             EXPECT_NE(row.key, "game.timing");

@@ -32,9 +32,9 @@ void Text(std::string text, int x, int y, int width, bool gold = false, int size
     font.DrawDirect(text.data(), x, y);
 }
 
-void Fill(int x, int y, int w, int h, int r, int g, int b) {
+void Fill(int x, int y, int w, int h, int r, int g, int b, int alpha = 0xFF) {
     DrawMenuFillBox(static_cast<float>(x), static_cast<float>(y), static_cast<float>(w), static_cast<float>(h),
-                    128, r, g, b);
+                    alpha, r, g, b);
 }
 
 void Plate(int x, int y, int width, int height, bool selected) {
@@ -66,31 +66,32 @@ void Draw() {
         Plate(284, 51, 160, 25, hit.kind == HitKind::Entry);
         Text(ButtonName("select", config) + ": PC SETTINGS", 291, 54, 147, true, 13);
     } else {
-        Fill(72, 90, 366, 236, 18, 17, 16);
-        // The original scrollbar remains a useful track, with this page's own thumb and count.
-        Fill(446, 98, 5, 225, 16, 13, 9);
+        // Retail FormDraw paints the gold waku and help text first. One opaque mask to mnwinback's
+        // inner edge hides retail copy; layout still stops at kRight so we do not cover mnwin5.
+        constexpr int kPanelTop = 90;
+        constexpr int kPanelBottom = 326;
+        Fill(kLeft, kPanelTop, kInnerRight - kLeft + 1, kOverlayBottom - kPanelTop, 18, 17, 16);
         const auto &page = Pages()[g_screen.page];
         const int   count = static_cast<int>(page.rows.size());
         const int   first = g_screen.first[g_screen.page];
-        const int   shown = std::min(kVisibleRows, count);
-        const int   thumb_h = 221 * shown / count;
-        const int   thumb_y = 100 + (count > shown ? (221 - thumb_h) * first / (count - shown) : 0);
-        Fill(447, thumb_y, 3, thumb_h, 95, 67, 35);
         Text("PC SETTINGS", 83, 55, 190, true, 18);
-        Text(std::format("{} / {}", g_screen.page + 1, Pages().size()), 385, 56, 60, false, 14);
-        for (int p = 0; p < kPages; ++p) {
-            const int  x = kLeft + p * kTabStep;
+        const int tab_count = static_cast<int>(Pages().size());
+        const int tab_step = TabStep(tab_count);
+        const int tab_width = tab_step > 3 ? tab_step - 3 : tab_step;
+        Text(std::format("{} / {}", g_screen.page + 1, tab_count), 385, 56, 60, false, 14);
+        for (int p = 0; p < tab_count; ++p) {
+            const int  x = kLeft + p * tab_step;
             const bool selected = p == g_screen.page;
-            Plate(x, 91, kTabStep - 3, 23, selected || (hit.kind == HitKind::Tab && hit.index == p));
-            Text(Pages()[p].name, x + 4, 93, kTabStep - 9, selected, 14);
+            Plate(x, 91, tab_width, 23, selected || (hit.kind == HitKind::Tab && hit.index == p));
+            Text(Pages()[p].name, x + 4, 93, tab_width - 8, selected, 14);
         }
         for (int row = first; row < std::min(count, first + kVisibleRows); ++row) {
             int         y = kRowY + (row - first) * kRowStep;
             const auto &item = page.rows[row];
             const bool  selected = g_screen.row[g_screen.page] == row;
             if (selected) {
-                Fill(kLeft - 6, y, kRight - kLeft + 6, 23, 42, 33, 23);
-                Text(">", kLeft - 5, y + 1, 12, true, 14);
+                Fill(kLeft, y, kRight - kLeft, 23, 42, 33, 23);
+                Text(">", kLeft + 1, y + 1, 12, true, 14);
             }
             Text(item.label, kLeft + 8, y + 1, kValueX - kLeft - 18, false, 15);
             Plate(kValueX, y + 1, kRight - kValueX, 21, selected);
@@ -109,7 +110,6 @@ void Draw() {
             Plate(272, 343, kRight - 272, 27, hit.kind == HitKind::ResetBinding);
             Text(ButtonName("square", config) + ": Restore binding", 278, 348, kRight - 284, false, 12);
         }
-        Fill(48, 386, 420, 60, 18, 17, 16);
         if (g_screen.save_failed) {
             Help("Could not save config.json. Settings work this session.\nCheck the save folder; change a setting to retry.");
         } else if (DisplayGetWarning() != DisplayWarning::None) {

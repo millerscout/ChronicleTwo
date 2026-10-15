@@ -113,8 +113,14 @@ gfx::Vertex3D SkinSlot(const mgVertexWeight &weight) {
 struct FaceEntry {
     std::shared_ptr<mgVisualFaceMesh> mesh;
     bool                              persistent = false;
+    bool                              gpu_uploaded = false;
     int                               last_frame = 0;
 };
+
+int g_mesh_upload_count = 0;
+int g_sweep_pass_count = 0;
+
+constexpr size_t kFaceTableReserveThreshold = 256;
 
 std::unordered_map<const mgCFace *, FaceEntry> &FaceTable() {
     static std::unordered_map<const mgCFace *, FaceEntry> table;
@@ -133,12 +139,19 @@ void ReleaseMesh(mgVisualFaceMesh &mesh) {
 // no mesh slot is free.
 void UploadIfReady(FaceEntry &entry) {
     mgVisualFaceMesh &mesh = *entry.mesh;
+    if (entry.gpu_uploaded && mesh.mesh != gfx::kNullMesh) {
+        return;
+    }
     if (!entry.persistent || mesh.mesh != gfx::kNullMesh || mesh.indices.empty() ||
         !mgPortRendererReady()) {
         return;
     }
 
     mesh.mesh = gfx::CreateMesh(mesh.vertices, mesh.indices);
+    ++g_mesh_upload_count;
+    entry.gpu_uploaded = true;
+    std::vector<gfx::Vertex3D>().swap(mesh.vertices);
+    std::vector<uint32_t>().swap(mesh.indices);
 }
 
 } // namespace
@@ -198,7 +211,12 @@ void mgVisualPortRefreshFace(mgCVisualMDT *visual, mgCFace *face) {
 
     // A plain visual is rebuilt on every CreateFacePacket and would churn GPU meshes if uploaded, so it stays
     // on the CPU.
-    FaceEntry &entry = FaceTable()[face];
+    auto &table = FaceTable();
+    if (table.size() >= kFaceTableReserveThreshold && table.bucket_count() < table.size() * 2) {
+        table.reserve(table.size() * 2);
+    }
+    FaceEntry &entry = table[face];
+    entry.gpu_uploaded = false;
     // Address reuse replaces the table's owner. Queued draws keep the previous geometry alive until their
     // packet arena is reset; the last owner releases its GPU mesh, including during display-list recording.
     entry.mesh = std::shared_ptr<mgVisualFaceMesh>(
@@ -223,8 +241,9 @@ std::shared_ptr<const mgVisualFaceMesh> FaceMesh(const mgCFace *face) {
 
     FaceEntry &entry = found->second;
     entry.last_frame = mgPortFrameCount();
-    UploadIfReady(entry);
-    mgVisualPortSweep();
+    if (!entry.gpu_uploaded || entry.mesh->mesh == gfx::kNullMesh) {
+        UploadIfReady(entry);
+    }
     return entry.mesh;
 }
 
@@ -241,6 +260,7 @@ void mgVisualPortSweep() {
         return;
     }
     swept_frame = frame;
+    ++g_sweep_pass_count;
 
     auto &table = FaceTable();
     for (auto it = table.begin(); it != table.end();) {
@@ -670,4 +690,20 @@ PORT_OVERRIDE int mgCVisualMDT::Draw(u_int *tag, float (*matrix)[4], mgCDrawMana
     }
 
     return 0;
+}
+
+int mgVisualPortMeshUploadCountForTest() {
+    return g_mesh_upload_count;
+}
+
+void mgVisualPortResetMeshUploadCountForTest() {
+    g_mesh_upload_count = 0;
+}
+
+int mgVisualPortSweepPassCountForTest() {
+    return g_sweep_pass_count;
+}
+
+void mgVisualPortResetSweepPassCountForTest() {
+    g_sweep_pass_count = 0;
 }
