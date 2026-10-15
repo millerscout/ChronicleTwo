@@ -111,6 +111,11 @@ UNIT_FIXUPS = [
 """, """    CMenuGeoPt = new (MenuGeoramaStack.Alloc(0x1B92)) CMenuGeorama;
     CMenuGeoPt->paint_return = 1;
 """),
+    # StepDownLoadAnaunce and DrawDownLoadAnaunce walk 8 message windows of a 6-entry table. Retail's
+    # two extra slots hold nothing; on the host they are the next statics (EventCamera), which the
+    # geostone announcement then scribbled on and drew as message windows, crashing later in the town
+    # or the event. Two more slots, never filled, keep the walk on null entries.
+    ("editmenu.cpp", "static CDC2Mes *DownLoadMes[6];", "static CDC2Mes *DownLoadMes[8];"),
     ("editloop.cpp", """    main_stack->Alloc(data_size - 210128);
     MenuBuffer__2.stSetBuffer(read_buffer = main_stack->stAlloc64(200000), 200000);
     read_buffer_end = read_buffer + 200000;""",
