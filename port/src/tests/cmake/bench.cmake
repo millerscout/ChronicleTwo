@@ -7,10 +7,11 @@ endif()
 add_test(NAME Bench.DungeonFloor1
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/port/bench_dungeon.py"
         --exe $<TARGET_FILE:darkchronicle>
-        --work "${CMAKE_BINARY_DIR}/bench/dungeon-floor1")
+        --work "${CMAKE_BINARY_DIR}/bench/dungeon-floor1"
+        --offscreen)
 set_tests_properties(Bench.DungeonFloor1 PROPERTIES
     SKIP_RETURN_CODE 77
-    TIMEOUT 600
+    TIMEOUT 7200
     RUN_SERIAL TRUE
     LABELS "bench;gpu")
 

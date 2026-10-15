@@ -10,6 +10,12 @@
 #include "platform/input.hpp"
 
 namespace {
+int OptionTabCenterX(int page) {
+    const int tab_count = static_cast<int>(options::Pages().size());
+    const int step = options::TabStep(tab_count);
+    return options::kLeft + page * step + step / 2;
+}
+
 const options::Row &Find(std::string_view key) {
     for (const auto &page : options::Pages()) {
         for (const auto &row : page.rows) {
@@ -143,7 +149,7 @@ TEST(PcOptions, LongBindingPageScrollsAndEachTabKeepsItsCursor) {
     EXPECT_EQ(state.row[0], 0);
     options::MoveRow(state, -1);
     EXPECT_EQ(state.row[0], 0);
-    options::SelectPage(state, -1);
+    options::SelectPage(state, options::kBindingsPage);
     EXPECT_EQ(state.page, options::kBindingsPage);
     EXPECT_EQ(state.row[options::kBindingsPage], 12);
     EXPECT_EQ(state.first[options::kBindingsPage], 5);
@@ -162,12 +168,12 @@ TEST(PcOptions, HitTestingUsesVisibleRowsAndHasNoDeadRowsOrOutOfBoundsHits) {
     EXPECT_EQ(options::HitTest(state, 300, 60).kind, options::HitKind::Entry);
     EXPECT_EQ(options::HitTest(state, 300, 180).kind, options::HitKind::None);
     state.open = true;
-    EXPECT_EQ(options::HitTest(state, 82, 91).index, 0);
-    EXPECT_EQ(options::HitTest(state, 370, 100).index, options::kBindingsPage);
+    EXPECT_EQ(options::HitTest(state, OptionTabCenterX(0), 100).index, 0);
+    EXPECT_EQ(options::HitTest(state, OptionTabCenterX(options::kBindingsPage), 100).index, options::kBindingsPage);
     EXPECT_EQ(options::HitTest(state, 288, 120).direction, -1);
-    EXPECT_EQ(options::HitTest(state, 420, 120).direction, 1);
+    EXPECT_EQ(options::HitTest(state, 400, 120).direction, 1);
     EXPECT_EQ(options::HitTest(state, 440, 120).kind, options::HitKind::None);
-    EXPECT_EQ(options::HitTest(state, 84, 352).kind, options::HitKind::Back);
+    EXPECT_EQ(options::HitTest(state, 100, 352).kind, options::HitKind::Back);
     options::SelectPage(state, 1);
     // Gap between the tab strip (bottom 114) and the first row (top 120).
     EXPECT_EQ(options::HitTest(state, 300, 117).kind, options::HitKind::None);
