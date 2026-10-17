@@ -68,15 +68,17 @@ void Draw() {
     } else {
         // Retail FormDraw paints the gold waku and help text first. Semi-transparent list mask plus
         // an opaque help/footer band hide retail copy without fighting mnwin5 on the right.
-        constexpr int kPanelTop = 90;
         constexpr int kPanelBottom = 326;
+        // Inner panel mask matches mnwinback (x=72, w=366). Header + tabs are fully opaque so retail
+        // parchment and old tab labels do not show through above the list.
+        constexpr int kPanelLeft = 72;
+        constexpr int kPanelWidth = 366;
+        constexpr int kHeaderTop = 48;
         constexpr int kTabTop = 91;
         constexpr int kTabHeight = 23;
-        // Opaque tab strip: the list mask is semi-transparent and retail artwork can show through,
-        // including ghost labels from older overlay layouts (e.g. a removed Georama tab).
-        Fill(kLeft, kTabTop, kRight - kLeft, kTabHeight, 18, 17, 16);
-        Fill(72, kPanelTop, 366, kTabTop - kPanelTop, 18, 17, 16, 128);
-        Fill(72, kTabTop + kTabHeight, 366, kPanelBottom - kTabTop - kTabHeight, 18, 17, 16, 128);
+        constexpr int kTabBottom = kTabTop + kTabHeight;
+        Fill(kPanelLeft, kHeaderTop, kPanelWidth, kTabBottom - kHeaderTop, 18, 17, 16);
+        Fill(kPanelLeft, kTabBottom, kPanelWidth, kPanelBottom - kTabBottom, 18, 17, 16, 128);
         Fill(446, 98, 5, 225, 16, 13, 9);
         const auto &page = Pages()[g_screen.page];
         const int   count = static_cast<int>(page.rows.size());
