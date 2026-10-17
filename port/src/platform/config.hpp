@@ -36,6 +36,8 @@ struct Config : HostSettings {
     int          georama_poly_multiplier = 1;
     // When on, up to 60 monsters can be active on a dungeon floor (retail is 24).
     bool         expanded_dungeon_monsters = false;
+    // game.floor_info_monsters: the floor information pages on to the floor's monsters and their drops.
+    bool         floor_info_monsters = false;
     // When on, event Use Item prompts with a single required id auto-confirm if owned.
     bool         auto_use_event_item = false;
     ConfigAspect aspect = ConfigAspect::Auto;

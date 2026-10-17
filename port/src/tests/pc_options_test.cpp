@@ -74,6 +74,7 @@ TEST(PcOptions, RequestedSettingsHaveUniqueRowsAndRoundTripTheirEdits) {
         "game.skip_intro",
         "game.georama_poly_multiplier",
         "game.expanded_dungeon_monsters",
+        "game.floor_info_monsters",
         "game.auto_use_event_item",
     };
     std::set<std::string> actual;
@@ -188,7 +189,8 @@ TEST(PcOptions, HitTestingUsesVisibleRowsAndHasNoDeadRowsOrOutOfBoundsHits) {
     EXPECT_EQ(options::HitTest(state, 300, options::kRowY + (audio_rows - 1) * options::kRowStep).index, audio_rows - 1);
     EXPECT_EQ(options::HitTest(state, 300, options::kRowY + audio_rows * options::kRowStep).kind, options::HitKind::None);
     options::SelectPage(state, options::kBindingsPage - 1);
-    EXPECT_EQ(options::HitTest(state, 300, 180).kind, options::HitKind::None);
+    const auto game_rows = static_cast<int>(options::Pages()[options::kBindingsPage - 1].rows.size());
+    EXPECT_EQ(options::HitTest(state, 300, options::kRowY + game_rows * options::kRowStep).kind, options::HitKind::None);
     options::SelectPage(state, options::kBindingsPage);
     state.first[options::kBindingsPage] = 7;
     EXPECT_EQ(options::HitTest(state, 300, 120).index, 7);

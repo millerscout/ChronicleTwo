@@ -8,5 +8,10 @@ extern short         DngTreeMode asm("MenuMouse_TreeMode");
 float PortDngMapVisibleRight();
 float PortDngMapVisibleBottom();
 void  mgPortPrimLineBands(mgCDrawPrim &prim, int lines);
-extern u8            dngfloor_infoview asm("MenuMouse_FloorInfoView");
-extern s8            DngAskMessageDrawFlag asm("MenuMouse_FloorAsk");
+// The floor information's state, which the monster list (port/src/floor_monsters.cpp) reads and changes.
+extern u8    dngfloor_infoview asm("MenuMouse_FloorInfoView");
+extern s8    DngAskMessageDrawFlag asm("MenuMouse_FloorAsk");
+extern int   DngInfoDrawAlpha asm("MenuMouse_FloorDrawAlpha");
+extern u8    GeoramaMateriaInfoDrawFlag asm("MenuMouse_FloorMateriaShown");
+extern s8    GeoramaMateriaInfoDrawPage asm("MenuMouse_FloorMateriaPage");
+extern short GeoramaMateriaNum asm("MenuMouse_FloorMateriaNum");

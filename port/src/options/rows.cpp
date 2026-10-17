@@ -207,6 +207,10 @@ std::span<const Page> Pages() {
                                                                     "all of them in view (retail only keeps the 5 nearest visible).\n"
                                                                     "Re-enter the floor after changing this.",
                                                                     {"Off", "On"}),
+                         Choice<&Config::floor_info_monsters>("game.floor_info_monsters", "Floor monster list",
+                                                              "Triangle on a floor's info lists its monsters, drops and\n"
+                                                              "gate key carrier (spoilers). Off is the original game.",
+                                                              {"Off", "On"}),
                          []() {
                              Row row{"game.georama_poly_multiplier", "Georama budget",
                                      "Multiplies how many polygons you can place in Georama towns.\n"
