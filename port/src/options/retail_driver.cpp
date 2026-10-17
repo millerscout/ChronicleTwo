@@ -11,6 +11,7 @@
 #include "menuop.hpp"
 #include "options/registry.hpp"
 #include "options/retail_system_mes.hpp"
+#include "dungeon_ceremony_qol.hpp"
 #include "platform/config.hpp"
 #include "stubs/menuop.hpp"
 
@@ -35,6 +36,18 @@ CDC2Mes *RetailLabelMesWindow(int retail_row) {
 }
 
 int RetailLabelMesSlot(int retail_row) { return retail_row % kOptionLabelRowsPerWindow; }
+
+void SyncIntFromConfig(const port_settings::Descriptor &entry) {
+    if (entry.kind != port_settings::Kind::Int || entry.retail_row < 0 ||
+        entry.retail_row >= OPTION_ITEM_MAX) {
+        return;
+    }
+    const Config config = ConfigGet();
+    if (entry.config_key == "game.dungeon_ceremony_qol") {
+        g_retail_choice[entry.retail_row] = static_cast<s32>(config.dungeon_ceremony_qol);
+        return;
+    }
+}
 
 void SyncBoolFromConfig(const port_settings::Descriptor &entry) {
     if (entry.kind != port_settings::Kind::Bool || entry.retail_row < 0 ||
@@ -133,7 +146,14 @@ void PortOptionsAfterScript() {
         if (!port_settings::HasSurface(entry.surfaces, port_settings::Surface::Retail)) {
             continue;
         }
-        SyncBoolFromConfig(entry);
+        if (entry.kind == port_settings::Kind::Bool) {
+            SyncBoolFromConfig(entry);
+        } else if (entry.kind == port_settings::Kind::Int) {
+            SyncIntFromConfig(entry);
+        }
+    }
+    if (CMenuOptionPtr != nullptr) {
+        CMenuOptionPtr->choice_num[OPTION_ITEM_DUNGEON_CEREMONY_QOL] = 3;
     }
     PortOptionsRefreshRetailLabels();
     if (CMenuOptionPtr != nullptr) {
@@ -147,11 +167,26 @@ bool PortOptionsOnDecide(int select, int choice) {
         !port_settings::HasSurface(entry->surfaces, port_settings::Surface::Retail)) {
         return false;
     }
-    if (entry->kind == port_settings::Kind::Bool && entry->retail_row >= 0 &&
-        entry->retail_row < OPTION_ITEM_MAX) {
+    if (entry->retail_row < 0 || entry->retail_row >= OPTION_ITEM_MAX) {
+        return false;
+    }
+    if (entry->kind == port_settings::Kind::Bool) {
         g_retail_choice[entry->retail_row] = choice;
         Config config = ConfigGet();
         port_settings::WriteConfigBool(config, entry->config_key, choice != 0);
+        ConfigChange(config);
+        return true;
+    }
+    if (entry->kind == port_settings::Kind::Int && entry->config_key == "game.dungeon_ceremony_qol") {
+        if (choice < 0) {
+            choice = 0;
+        }
+        if (choice > 2) {
+            choice = 2;
+        }
+        g_retail_choice[entry->retail_row] = choice;
+        Config config = ConfigGet();
+        config.dungeon_ceremony_qol = static_cast<ConfigDungeonCeremonyQoL>(choice);
         ConfigChange(config);
         return true;
     }

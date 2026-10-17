@@ -6,9 +6,10 @@
 
 TEST(PortSettingsRegistry, HostBoolsMapToConfigKeysAndRetailRows) {
     const auto entries = port_settings::Descriptors();
-    ASSERT_EQ(entries.size(), 4u);
+    ASSERT_EQ(entries.size(), 5u);
 
     const auto *debug = port_settings::FindByConfigKey("game.debug_mode");
+    const auto *ceremony = port_settings::FindByConfigKey("game.dungeon_ceremony_qol");
     const auto *skip = port_settings::FindByConfigKey("game.skip_intro");
     ASSERT_NE(debug, nullptr);
     ASSERT_NE(skip, nullptr);
@@ -25,6 +26,11 @@ TEST(PortSettingsRegistry, HostBoolsMapToConfigKeysAndRetailRows) {
 
     EXPECT_EQ(port_settings::FindByRetailRow(OPTION_ITEM_UNK_9), debug);
     EXPECT_EQ(port_settings::FindByRetailRow(OPTION_ITEM_SKIP_INTRO), skip);
+    ASSERT_NE(ceremony, nullptr);
+    EXPECT_STREQ(ceremony->id, "dungeon_ceremony_qol");
+    EXPECT_EQ(ceremony->retail_row, OPTION_ITEM_DUNGEON_CEREMONY_QOL);
+    EXPECT_TRUE(port_settings::HasSurface(ceremony->surfaces, port_settings::Surface::Retail));
+    EXPECT_TRUE(port_settings::HasSurface(ceremony->surfaces, port_settings::Surface::PcOverlay));
 }
 
 TEST(PortSettingsRegistry, PcOverlayPageCountMatchesPagesBuilder) {

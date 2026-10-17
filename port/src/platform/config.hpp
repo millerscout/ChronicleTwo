@@ -3,6 +3,7 @@
 #include <string>
 #include <string_view>
 
+#include "dungeon_ceremony_qol.hpp"
 #include "platform/settings.hpp"
 
 // Native gameplay always runs at the NTSC field rate, independently of configuration.
@@ -42,7 +43,8 @@ struct Config : HostSettings {
     // When on, event Use Item prompts with a single required id auto-confirm if owned.
     bool         auto_use_event_item = false;
     // game.floor_info_monsters: Triangle on a dungeon floor's information lists its monsters and their drops.
-    bool         floor_info_monsters = false;
+    bool                     floor_info_monsters = false;
+    ConfigDungeonCeremonyQoL dungeon_ceremony_qol = ConfigDungeonCeremonyQoL::Off;
     ConfigAspect aspect = ConfigAspect::Auto;
     // video.fps_detail "budget": frame-budget ms lines in the FPS overlay (stored separately from Kazarov's enum).
     bool         fps_detail_budget = false;

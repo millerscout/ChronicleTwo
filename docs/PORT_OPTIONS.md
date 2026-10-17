@@ -11,6 +11,7 @@ Host-only game settings live in **PC SETTINGS** (Backspace overlay, or Select/Vi
 | `game.autosave` | Autosave | **Off** |
 | `game.debug_mode` | Debug mode | **Off** |
 | `game.skip_intro` | Skip intro | **Off** |
+| `game.dungeon_ceremony_qol` | Fast dungeon ceremonies (`off` / `manual` / `auto`) | **off** |
 | `game.expanded_dungeon_monsters` | Expanded dungeon monsters | **Off** |
 | `game.georama_poly_multiplier` | Georama budget | **1×** (retail caps) |
 

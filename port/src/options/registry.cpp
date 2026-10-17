@@ -38,6 +38,14 @@ constexpr Descriptor kDescriptors[] = {
         Kind::Bool,
         -1,
     },
+    {
+        "dungeon_ceremony_qol",
+        "game.dungeon_ceremony_qol",
+        "Fast dungeon ceremonies",
+        Surface::PcOverlay | Surface::Retail,
+        Kind::Int,
+        OPTION_ITEM_DUNGEON_CEREMONY_QOL,
+    },
 };
 
 } // namespace

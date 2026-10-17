@@ -72,7 +72,8 @@ enum OPTION_ITEM {
     OPTION_ITEM_PAUSE_OVERLAY   = 13, /**< Pause screen overlay. */
     OPTION_ITEM_CAMERA_VERTICAL = 14, /**< Vertical axis of the first-person camera. */
     OPTION_ITEM_CAMERA_ROTATION = 15, /**< Rotation direction of the camera. */
-    OPTION_ITEM_SKIP_INTRO      = 16, /**< PC port: skip Sony / Level-5 logos. */
+    OPTION_ITEM_SKIP_INTRO           = 16, /**< PC port: skip Sony / Level-5 logos. */
+    OPTION_ITEM_DUNGEON_CEREMONY_QOL = 17, /**< PC port: faster dungeon ceremony events. */
 };
 
 // clang-format on
