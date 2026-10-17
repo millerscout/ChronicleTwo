@@ -125,8 +125,13 @@ if ($command -eq 'build') {
 # dc2data check command still performs a full output hash audit.
 $source = Join-Path $checkout 'rom/pal/Dark Chronicle (PAL).iso'
 if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-    $source = Join-Path $checkout 'rom/pal/extracted/iso'
-    if (-not (Test-Path -LiteralPath $source -PathType Container)) { $source = $null }
+    $palIsos = @(Get-ChildItem -Path (Join-Path $checkout 'rom/pal') -Filter '*.iso' -File -ErrorAction SilentlyContinue)
+    if ($palIsos.Count -gt 0) {
+        $source = $palIsos[0].FullName
+    } else {
+        $source = Join-Path $checkout 'rom/pal/extracted/iso'
+        if (-not (Test-Path -LiteralPath $source -PathType Container)) { $source = $null }
+    }
 }
 
 # dc2data takes <game-root>\data and publishes <game-root>\data.zip beside data.json.
