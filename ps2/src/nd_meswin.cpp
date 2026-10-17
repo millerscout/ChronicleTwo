@@ -1378,6 +1378,19 @@ int ClsMes::State() {
     return scroll_wait != 0 ? CLSMES_SCROLLING : CLSMES_REVEALING;
 }
 
+void ClsMes::CompleteReveal() {
+    if (char_num <= 0) {
+        reveal = 0.0f;
+        reveal_num = 0;
+        wait = 0;
+        return;
+    }
+
+    reveal = (float) char_num;
+    reveal_num = char_num;
+    wait = 0;
+}
+
 void ClsMes::GoNextPage() {
     if (page_wait != 0) {
         page_wait = 0;
