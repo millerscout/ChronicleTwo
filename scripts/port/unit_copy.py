@@ -50,6 +50,10 @@ RETAIL_BRIDGES = {
         ("InitMainCharaBG(int,mgCMemory*,int)", "InitMainCharaBG", "PortRetailInitMainCharaBG"),
         ("KeyMainCharaBG()", "KeyMainCharaBG", "PortRetailKeyMainCharaBG"),
     ],
+    "menudraw.cpp": [("DrawMenuFillBox(int,int,int,int)", "DrawMenuFillBox", "PortRetailDrawMenuFillBox")],
+    "menumain.cpp": [("MenuMainExit()", "MenuMainExit", "PortRetailMenuMainExit"),
+                     ("MenuWorldTrans()", "MenuWorldTrans", "PortRetailMenuWorldTrans")],
+    "menusys.cpp": [("MenuItemDraw()", "MenuItemDraw", "PortRetailMenuItemDraw")],
 }
 
 
