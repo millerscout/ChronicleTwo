@@ -70,7 +70,13 @@ void Draw() {
         // an opaque help/footer band hide retail copy without fighting mnwin5 on the right.
         constexpr int kPanelTop = 90;
         constexpr int kPanelBottom = 326;
-        Fill(72, kPanelTop, 366, kPanelBottom - kPanelTop, 18, 17, 16, 128);
+        constexpr int kTabTop = 91;
+        constexpr int kTabHeight = 23;
+        // Opaque tab strip: the list mask is semi-transparent and retail artwork can show through,
+        // including ghost labels from older overlay layouts (e.g. a removed Georama tab).
+        Fill(kLeft, kTabTop, kRight - kLeft, kTabHeight, 18, 17, 16);
+        Fill(72, kPanelTop, 366, kTabTop - kPanelTop, 18, 17, 16, 128);
+        Fill(72, kTabTop + kTabHeight, 366, kPanelBottom - kTabTop - kTabHeight, 18, 17, 16, 128);
         Fill(446, 98, 5, 225, 16, 13, 9);
         const auto &page = Pages()[g_screen.page];
         const int   count = static_cast<int>(page.rows.size());
@@ -87,8 +93,9 @@ void Draw() {
         for (int p = 0; p < tab_count; ++p) {
             const int  x = kLeft + p * tab_step;
             const bool selected = p == g_screen.page;
-            Plate(x, 91, tab_width, 23, selected || (hit.kind == HitKind::Tab && hit.index == p));
-            Text(Pages()[p].name, x + 4, 93, tab_width - 8, selected, 14);
+            const int  width = (p == tab_count - 1) ? (kRight - x) : tab_width;
+            Plate(x, kTabTop, width, kTabHeight, selected || (hit.kind == HitKind::Tab && hit.index == p));
+            Text(Pages()[p].name, x + 4, kTabTop + 2, width - 8, selected, 14);
         }
         for (int row = first; row < std::min(count, first + kVisibleRows); ++row) {
             int         y = kRowY + (row - first) * kRowStep;
