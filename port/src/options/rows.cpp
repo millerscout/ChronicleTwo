@@ -228,6 +228,11 @@ std::span<const Page> Pages() {
                              };
                              return row;
                          }(),
+                         Choice<&Config::dungeon_ceremony_qol>("game.dungeon_ceremony_qol", "Fast dungeon ceremonies",
+                                                              "Off is retail pacing.\nManual: faster beats and tap "
+                                                              "confirm to finish ceremony text.\nAuto: instant "
+                                                              "ceremony text.",
+                                                              {"Off", "Manual", "Auto"}),
                          Choice<&Config::auto_use_event_item>("game.auto_use_event_item", "Auto-use event items",
                                                               "Default Off. When On, events that ask for one specific item\n"
                                                               "you already have skip the item picker grid.",

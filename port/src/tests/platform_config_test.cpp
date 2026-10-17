@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 
+#include "dungeon_ceremony_qol.hpp"
 #include "platform/config.hpp"
 #include "platform/config_io.hpp"
 #include "platform/paths.hpp"
@@ -288,6 +289,26 @@ TEST_F(PlatformConfig, AutoUseEventItemParsesBoolsAndDefaultsToOff) {
     ASSERT_FALSE(ConfigParse("").auto_use_event_item);
     ASSERT_FALSE(ConfigParse(R"({"game": {"auto_use_event_item": false}})").auto_use_event_item);
     ASSERT_TRUE(ConfigParse(R"({"game": {"auto_use_event_item": true}})").auto_use_event_item);
+}
+
+TEST_F(PlatformConfig, DungeonCeremonyQoLParsesModesAndDefaultsToOff) {
+    ASSERT_EQ(Config{}.dungeon_ceremony_qol, ConfigDungeonCeremonyQoL::Off);
+    ASSERT_EQ(ConfigParse(R"({"game": {"dungeon_ceremony_qol": "off"}})").dungeon_ceremony_qol,
+              ConfigDungeonCeremonyQoL::Off);
+    ASSERT_EQ(ConfigParse(R"({"game": {"dungeon_ceremony_qol": "manual"}})").dungeon_ceremony_qol,
+              ConfigDungeonCeremonyQoL::Manual);
+    ASSERT_EQ(ConfigParse(R"({"game": {"dungeon_ceremony_qol": "auto"}})").dungeon_ceremony_qol,
+              ConfigDungeonCeremonyQoL::Auto);
+    ASSERT_EQ(ConfigParse(R"({"game": {"dungeon_ceremony_qol": "bogus"}})").dungeon_ceremony_qol,
+              ConfigDungeonCeremonyQoL::Off);
+}
+
+TEST_F(PlatformConfig, DungeonCeremonyQoLRoundTripsThroughSerialize) {
+    Config config;
+    config.dungeon_ceremony_qol = ConfigDungeonCeremonyQoL::Auto;
+    Config parsed = ConfigParse(ConfigSerialize(config));
+    ASSERT_EQ(parsed.dungeon_ceremony_qol, ConfigDungeonCeremonyQoL::Auto);
+    ASSERT_TRUE(parsed == config);
 }
 
 TEST_F(PlatformConfig, AutoUseEventItemRoundTripsThroughSerialize) {

@@ -618,6 +618,13 @@ public:
 
     /**
      *
+     * Finishes typewriter reveal for the current page immediately.
+     *
+     */
+    void CompleteReveal();
+
+    /**
+     *
      * Reveals the next character and acts on the code it holds; gives back 1
      * at a page break, 2 at MES_CODE_END and 0 otherwise.
      *

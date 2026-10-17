@@ -34,6 +34,7 @@
 #include "helpmes.hpp"
 #include "mainloop.hpp"
 #ifdef PORT
+#include "dungeon_ceremony_qol.hpp"
 #include "dungeon_monster_pool.hpp"
 #include "dungeon_read_buffer.hpp"
 #include "port_memory_budget.hpp"
@@ -2155,6 +2156,9 @@ void DngStep() {
 int RunMainEvent() {
     switch (EventLoop()) {
         case EVENT_REQUEST_END:
+#ifdef PORT
+            PortDungeonCeremonyQoLOnEventEnd();
+#endif
             DngStatus.mode = DNG_STATUS_FIELD;
             BattleAreaScene->script.running = false;
             DngMainScene->active_camera = 0;
@@ -3020,6 +3024,9 @@ int EventScriptSetup(SYSTEM_SCRIPT_INFO *script) {
     if (RunEvent(script->event_no, DngMainScene)) {
         script->running = true;
         printf("RUN SYS_SCRIPT %d\n", script->event_no);
+#ifdef PORT
+        PortDungeonCeremonyQoLOnEventStart(script->event_no);
+#endif
         DngStatus.mode = DNG_STATUS_EVENT;
         DngMainScene->before_camera = 0;
         ResetEyeView(MainChara__2);

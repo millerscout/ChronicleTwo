@@ -38,6 +38,9 @@
 #include "intersection.hpp"
 #include "inventmn.hpp"
 #include "mainloop.hpp"
+#ifdef PORT
+#include "dungeon_ceremony_qol.hpp"
+#endif
 #include "mapinfo.hpp"
 #include "mapjump.hpp"
 #include "mapparts.hpp"
@@ -889,6 +892,10 @@ int CEohMother::SetStep(int slot, float step) {
         return false;
     }
 
+#ifdef PORT
+    step = PortDungeonCeremonyQoLMotionStepScale(step);
+#endif
+
     CEoh *handle = &eoh[slot];
 
     switch (handle->type) {
@@ -911,6 +918,10 @@ int CEohMother::SetChangeStep(int slot, float step) {
     if (slot < 0 || slot >= EOH_NUM) {
         return false;
     }
+
+#ifdef PORT
+    step = PortDungeonCeremonyQoLMotionStepScale(step);
+#endif
 
     CEoh *handle = &eoh[slot];
 
@@ -3283,6 +3294,9 @@ int EdEventStep() {
 
     EventScreenEffect.Step();
     ReadBG();
+#ifdef PORT
+    PortDungeonCeremonyQoLEventFrame();
+#endif
     return true;
 }
 

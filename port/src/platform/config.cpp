@@ -225,6 +225,22 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
     if (name == "game.auto_use_event_item") {
         return ReadBool(value, config.auto_use_event_item);
     }
+    if (name == "game.dungeon_ceremony_qol") {
+        if (!value.is_string()) {
+            return false;
+        }
+        const std::string mode = value.get<std::string>();
+        if (mode == "manual") {
+            config.dungeon_ceremony_qol = ConfigDungeonCeremonyQoL::Manual;
+            return true;
+        }
+        if (mode == "auto") {
+            config.dungeon_ceremony_qol = ConfigDungeonCeremonyQoL::Auto;
+            return true;
+        }
+        config.dungeon_ceremony_qol = ConfigDungeonCeremonyQoL::Off;
+        return mode == "off";
+    }
     if (name == "video.present_mode") {
         return ReadEnum(value, kPresentModeNames, s.present_mode);
     }
@@ -492,6 +508,17 @@ std::string ConfigSerialize(const Config &config) {
     root["game"]["expanded_dungeon_monsters"] = config.expanded_dungeon_monsters;
     root["game"]["floor_info_monsters"] = config.floor_info_monsters;
     root["game"]["auto_use_event_item"] = config.auto_use_event_item;
+    switch (config.dungeon_ceremony_qol) {
+        case ConfigDungeonCeremonyQoL::Manual:
+            root["game"]["dungeon_ceremony_qol"] = "manual";
+            break;
+        case ConfigDungeonCeremonyQoL::Auto:
+            root["game"]["dungeon_ceremony_qol"] = "auto";
+            break;
+        default:
+            root["game"]["dungeon_ceremony_qol"] = "off";
+            break;
+    }
     root["video"]["present_mode"] = kPresentModeNames[static_cast<std::size_t>(s.present_mode)];
     root["video"]["interpolation"] = config.interpolation;
     root["video"]["interpolation_draw_budget"] = config.interpolation_draw_budget;

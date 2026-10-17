@@ -28,6 +28,9 @@
 #include "nd_meswin.hpp"
 #include "padcontrol.hpp"
 #include "runscript.hpp"
+#ifdef PORT
+#include "dungeon_ceremony_qol.hpp"
+#endif
 #include "savedata.hpp"
 #include "sceneseq.hpp"
 #include "scenesnd.hpp"
@@ -349,6 +352,11 @@ int EventLoop() {
         default:
             cnt = 0;
             EventScript.resume();
+#ifdef PORT
+            if (!EventScript.end && PortDungeonCeremonyQoLShouldDoubleResume()) {
+                EventScript.resume();
+            }
+#endif
             break;
     }
 
