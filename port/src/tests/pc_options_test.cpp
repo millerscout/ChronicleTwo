@@ -21,6 +21,12 @@ const options::Row &Find(std::string_view key) {
 }
 } // namespace
 
+TEST(PcOptions, AutoUseEventItemDefaultsToOffInOverlay) {
+    const Config defaults;
+    EXPECT_FALSE(defaults.auto_use_event_item);
+    EXPECT_EQ(Find("game.auto_use_event_item").value(defaults), "Off");
+}
+
 TEST(PcOptions, RequestedSettingsHaveUniqueRowsAndRoundTripTheirEdits) {
     const std::set<std::string> required{
         "video.fullscreen",
@@ -33,7 +39,7 @@ TEST(PcOptions, RequestedSettingsHaveUniqueRowsAndRoundTripTheirEdits) {
         "video.show_fps",
         "audio.master_volume",
         "audio.soundtrack",
-        "audio.robot_voice",
+        "audio.dualsense_speaker",
         "audio.controller_volume",
         "input.mouse_sensitivity",
         "input.mouse_invert_y",
@@ -43,9 +49,13 @@ TEST(PcOptions, RequestedSettingsHaveUniqueRowsAndRoundTripTheirEdits) {
         "input.stick_sensitivity",
         "input.stick_invert_x",
         "input.stick_invert_y",
+        "input.dualsense_haptics",
+        "input.haptics_strength",
         "input.glyphs",
         "input.glyph_device",
         "game.autosave",
+        "game.quick_loadout_title",
+        "game.auto_use_event_item",
     };
     std::set<std::string> actual;
     for (const auto &page : options::Pages()) {
