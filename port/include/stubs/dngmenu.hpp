@@ -8,3 +8,5 @@ extern short         DngTreeMode asm("MenuMouse_TreeMode");
 float PortDngMapVisibleRight();
 float PortDngMapVisibleBottom();
 void  mgPortPrimLineBands(mgCDrawPrim &prim, int lines);
+extern u8            dngfloor_infoview asm("MenuMouse_FloorInfoView");
+extern s8            DngAskMessageDrawFlag asm("MenuMouse_FloorAsk");
