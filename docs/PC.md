@@ -97,6 +97,7 @@ dc2data current <iso-or-directory> <data-directory>
 ```
 
 `extract` uses up to 32 workers by default; `--jobs N` accepts 1 through 64.
+After the raw-file counter, the CLI prints coalesced phase progress on stderr (`dc2data: [ 45%] Converting textures…`) so long conversion and packing steps are not silent; the setup window uses the same weighted phases in its progress bar.
 `current` compares the source's path and file metadata with the versioned marker and verifies both output directories exist; it returns 0 only when extraction can be skipped. `check` performs the full hash and payload audit.
 
 The source of `extract` is a Dark Chronicle disc image or a folder holding `DATA.HD4`, `DATA.DAT`, `SOUND.HD3`, `SOUND.DAT` and `MOVIE`. Give it `<game-root>/data` as the output. The C++ command-line program calls the Rust extractor through a `cxx` bridge; conversion runs in process. Data version 9 writes every game file, retained and converted, into one Zstandard ZIP archive, `<game-root>/data.zip` ([format](PORT_ARCHIVE_FORMAT.md)), with a version marker at `<game-root>/data.json`. Textures use JSON and PNG; sound uses semantic JSON and PCM WAV; models and complete characters use glTF with embedded images and minimal gameplay JSON sidecars; configurations and textual maps use typed JSON; movies use self-contained MP4 with copied MPEG-2 video and embedded lossless ALAC audio. Ordinary PACK archives become folders with a minimal versioned `pack.json` containing no contents listing. Substituted originals are removed. Native game code references actual asset paths directly, without catalogs or manifests. See the [migration](PORT_ASSET_MIGRATION.md), [texture](PORT_TEXTURE_FORMAT.md), [audio](PORT_AUDIO_FORMAT.md), [model](PORT_MODEL_FORMAT.md), and [configuration](PORT_CONFIG_FORMAT.md) documents. `dc2data check <game-root>/data` validates native payloads and the whole-output SHA-256 digest. Extraction stages both trees before publication and restores the previous output on failure. Exit status: 0 on success, 1 on an error or failed check, 2 on usage error.
@@ -495,6 +496,7 @@ Writes are atomic: the file is written as `config.json.tmp` and renamed over `co
 |---|---|---|---|---|
 | `game.debug_mode` | bool | false | | the boot debug unlock, and the pad-1 chord; see [DEBUG.md](DEBUG.md) |
 | `game.autosave` | bool | true | | write the autosave on arriving in a town or on a dungeon floor |
+| `game.quick_loadout_title` | string | bar | bar, plate | the quick loadout panel's title on a bar, or on a plate like the EXP gauge's; see [QUICK_LOADOUT.md](QUICK_LOADOUT.md) |
 | `video.present_mode` | string | fifo | fifo, mailbox, immediate | Vulkan present mode |
 | `video.interpolation` | bool | true | | interpolate display frames between ticks |
 | `video.interpolation_draw_budget` | int | 2200 | 0 or more | when a tick records more mesh+2D draws than this, skip tweened display frames (0 = never skip) |
@@ -511,7 +513,7 @@ Writes are atomic: the file is written as `config.json.tmp` and renamed over `co
 | `audio.master_volume` | number | 1 | 0 to 1 | final mixer gain, independent of the game's fades and core volumes; applies live |
 | `audio.sound` | string | stereo | stereo, surround | output layout; read and saved, not yet applied (the output is stereo) |
 | `audio.soundtrack` | string | ps2 | ps2, custom | `custom` plays recordings from `soundtrack/` beside the save root, as named by its `soundtrack.json` |
-| `audio.robot_voice` | string | tv | tv, controller | `controller` plays the Ridepod's voice lines on a DualSense speaker; see "Controller speaker" |
+| `audio.dualsense_speaker` | bool | true | | plays the Ridepod's voice lines, the treasure chests' opening and the menus' sound effects on a DualSense speaker; see "Controller speaker" |
 | `audio.controller_volume` | number | 1 | 0 to 2 | controller speaker gain, applied after `audio.master_volume` |
 | `input.mouse_sensitivity` | number | 0.1 | above 0 | mouse look speed |
 | `input.stick_sensitivity` | number | 1.33 | above 0 | stick look speed |
@@ -529,6 +531,8 @@ Writes are atomic: the file is written as `config.json.tmp` and renamed over `co
 | `input.touchpad_sensitivity` | number | 1.0 | above 0 | touchpad speed |
 | `input.lightbar` | bool | true | | lets the game colour the lightbar; read and saved, nothing sets a colour yet |
 | `input.rumble_strength` | number | 1.0 | 0 to 1 | scales the rumble motors |
+| `input.dualsense_haptics` | string | full | off, vibration, full | what a DualSense's HD actuators play; see "Rumble and DualSense haptics" |
+| `input.haptics_strength` | number | 1.0 | 0 to 2 | gain on the DualSense actuators |
 | `input.glyphs` | string | new | original, new | button symbols: `new` from `glyphs/`, `original` from the game |
 | `input.glyph_device` | string | auto | auto, ps3, ps4, ps5, ps5color, xbox, switch, steamdeck, steamcontroller, keyboard | whose button symbols are drawn |
 | `input.mouse_release` | string or array of strings | empty | key names | keys that release the captured mouse |
@@ -573,10 +577,8 @@ The PC page uses the game's font and Options artwork. L1/R1 changes tabs, Up/Dow
 | Display | Windowed/fullscreen, resolution, FIFO/mailbox/immediate, frame cap, interpolation, auto/4:3 aspect, UI scale, FPS counter |
 | Audio | Master volume and PS2/custom soundtrack |
 | Controls | Mouse sensitivity, Y inversion and capture; stick sensitivity and X/Y inversion; button symbols and glyph style |
-| Game | Autosave |
 | Bindings | Keyboard and mouse bindings for pad buttons, movement, look, FPS and debug menu |
-| Game | Debug mode, skip intro logos |
-| Georama | Polygon build budget multiplier (1×–6× retail caps; see [PORT_OPTIONS.md](PORT_OPTIONS.md)) |
+| Game | Autosave, debug mode, skip intro, expanded dungeon monsters, Georama polygon budget (1×–6×; see [PORT_OPTIONS.md](PORT_OPTIONS.md)) |
 
 Edits save to `config.json` and apply immediately. Soundtrack selection takes effect the next time a song starts, including one whose data is already loaded. Custom recordings use the actual sequence JSON path in `soundtrack/soundtrack.json`; `AUDIO_TRACE` prints that path. An absent or invalid recording falls back to the converted sequence. Current music is not restarted by moving the setting.
 
@@ -627,7 +629,10 @@ keys that release it.
 
 Mouse selection covers the town and dungeon root menus, title menu, dungeon
 floor map and Save Adventure action, the flat save/load file lists,
-and the field Use Item popup. Yes/No boxes and dialogue choices use the message
+and the field Use Item popup. With **PC SETTINGS → Game → Auto-use event items**
+enabled, events that require exactly one specific item you already carry skip
+that picker and hand the item over immediately (default **Off**; fish-tournament
+item select and multi-item prompts are unchanged). Yes/No boxes and dialogue choices use the message
 system's drawn choice positions and feed its normal directional input before
 confirming. The pointer follows the renderer's UI mapping, including widescreen
 anchoring and display scaling.
@@ -970,7 +975,13 @@ Menu tile patterns derive phase-preserving coverage from `mgPortVisibleExtent()`
 
 ### Controller speaker
 
-`audio.robot_voice` `"controller"` sends the Ridepod's voice lines (the `8520xx.wav` streams the dungeon robot opens) to a second playback device: the first one whose name contains "DualSense" or "Wireless Controller". Windows exposes that endpoint for a DualSense on USB, and for a Bluetooth pad through a DualSense emulation driver that creates one. The lines are summed to mono and leave the main mix while they play. Without such a device they stay on the main output and stderr reports it once. The choice applies from the next line; `audio.controller_volume` applies live.
+`audio.dualsense_speaker` sends the Ridepod's voice lines (the `8520xx.wav` streams the dungeon robot opens) the treasure chests' opening (sound effects 110 to 112 of the base bank, the wood, iron and stone chests' sequences) and the menus' sound effects (the system bank `SY_000`: cursor, decide, windows, items, equipment, inventions, Georama, message advance; its trap, level-up and lock-on effects stay on the TV) to a second playback device: the first one whose name contains "DualSense" or "Wireless Controller". Windows exposes that endpoint for a DualSense on USB, and for a Bluetooth pad through a DualSense emulation driver that creates one. The sounds are summed to mono and leave the main mix while they play; the effects play there without reverb. Without such a device they stay on the main output and stderr reports it once. Turning it off keeps every sound on the main output, as on the PS2. The choice applies from the next line or effect; `audio.controller_volume` applies live. The older `audio.robot_voice` key still loads and is no longer written.
+
+### Rumble and DualSense haptics
+
+The game vibrates only when the player takes a hit (the small motor for a stagger, the large one for a knockdown) and while fishing. `CGamePad::Step` sends those motors to every gamepad SDL has open, not only pad 0: DSX and Steam Input show one DualSense as two devices, and only one of them shakes. stderr logs each pad once, with its type, connection and rumble support.
+
+When the controller speaker's device (see "Controller speaker") has four channels, as a DualSense's does, it is opened as quad: the front pair is the speaker and the rear pair drives the two actuators. With `input.dualsense_haptics` on, the motors play there instead of through SDL's emulated rumble, which turns the pad's audio haptics off while it runs: the large motor as a 60 Hz tone, heavier on the left, the small one as a 170 Hz tone, heavier on the right. `full` adds camera quakes (the dungeon's `CAMERA_QUAKE` and the scene sequences' quake commands, while their counters move) as a low rumble, and the effects of the character, battle and monster sound ports (monsters at half volume), mirrored to a third mixer and low-passed at 220 Hz. Without four channels, or with `off`, the motors use SDL rumble.
 
 ### Font and headless
 

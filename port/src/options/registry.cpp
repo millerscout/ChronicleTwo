@@ -25,7 +25,7 @@ constexpr Descriptor kDescriptors[] = {
     {
         "georama_poly_multiplier",
         "game.georama_poly_multiplier",
-        "Polygon budget",
+        "Georama budget",
         Surface::PcOverlay,
         Kind::Int,
         -1,
@@ -68,7 +68,6 @@ constexpr const char *kPcOverlayPageNames[] = {
     "Controls",
     "Bindings",
     "Game",
-    "Georama",
 };
 
 std::span<const char *const> PcOverlayPageNames() { return kPcOverlayPageNames; }
