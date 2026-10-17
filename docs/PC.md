@@ -229,7 +229,7 @@ The save root is the first of these that applies. It is created when first resol
 3. `DC2_SAVE`
 4. the per-user save directory: `%LOCALAPPDATA%\chronicletwo\saves` on Windows, `$XDG_DATA_HOME/chronicletwo/saves` or `~/.local/share/chronicletwo/saves` elsewhere
 
-A data root is missing when its parent has no current `data.json` marker, or has neither `data.zip` nor the `data/` and `port_data/` directories. A windowed run opens Kazarov's Rust setup window before creating the game window. The editable path accepts a disc image or a disc folder; **Choose ISO** opens a file picker for disc images (*.iso, *.bin, *.img), while **Choose folder** opens the operating system's folder picker (and auto-detects an ISO if the selected folder contains one). **Okay** starts extraction on a worker thread. The progress bar tracks completed raw files and texture conversions, reserving 100% for successful publication. The setup window then closes automatically and normal game startup continues. Existing current data skips setup on subsequent launches. Extraction errors remain visible for correction and retry; closing setup before extraction exits with status 3. During extraction the window stays open until the worker finishes. Headless runs still print the `dc2data extract` command and exit with status 3.
+A data root is missing when its parent has no current `data.json` marker, or has neither `data.zip` nor the `data/` and `port_data/` directories. A windowed run opens Kazarov's Rust setup window before creating the game window. The editable path accepts a disc image or a disc folder; **Choose folder** opens the operating system's folder picker. **Okay** starts extraction on a worker thread. The progress bar tracks completed raw files and texture conversions, reserving 100% for successful publication. The setup window then closes automatically and normal game startup continues. Existing current data skips setup on subsequent launches. Extraction errors remain visible for correction and retry; closing setup before extraction exits with status 3. During extraction the window stays open until the worker finishes. Headless runs still print the `dc2data extract` command and exit with status 3.
 
 The setup uses an eframe desktop window and an rfd native folder dialog on Windows, Linux and macOS. Linux folder selection requires an XDG desktop portal and its desktop backend. Extraction uses the same staged publication and integrity checks as `dc2data`; the output must be outside the selected source folder. A typed ISO path is supported without mounting the image.
 
@@ -863,6 +863,28 @@ Retail buffers that lie inside no mapped block become blocks. `MainLoop` maps `m
 A buffer inside a block is a child view, and it stays exactly where retail carves it. Dark Chronicle carves sub-arenas from a parent's top (`stGetTop`, `stGetRest`), often through local `mgCMemory` objects whose allocations outlive them, and re-carves overlapping regions by design (`menuchr`, `menusys`, `inventmn`, `dng_main`, `editloop`). Per-object blocks, as in Dark Cloud 1, would break that. An audit of every `stSetBuffer` and `SetHeapMem` site found more than 20 that depend on it. Headroom reaches a child through its parent, since most children take the parent's rest.
 
 `stAlloc` and `Alloc` past an arena's end abort, naming `mgCMemory::name` or, when it has none, the arena's address, where retail printed and returned NULL. `stAllocTest` keeps retail's probe.
+
+### Logical memory budgets (PORT)
+
+Physical `kArenaHeadroom` multiplies backing storage; it does **not** raise `mgCMemory.stack_size`. Retail logical caps still apply unless the port bumps them in `ps2/src/charasetup.cpp` and related planners.
+
+| Arena / stack | Retail qw | PORT qw | Delta | Notes |
+|---------------|-----------|---------|-------|-------|
+| Human `mem_table` stack 0 (Max body / JSON metadata) | 68500 | 80500 | `CHARA_MODEL_LOAD_DELTA` (+12000) | ABRT at 68500/68500 on dungeon entry (Oct 2026); bootstrap until peak tests refine |
+| Human stack 1 (skin) | 40000 | 52000 | same | |
+| Robo stacks 0–2 | 30000 / 30000 / 60000 | +12000 each | same | |
+| Edit stack 0 | 75000 | 87000 | same | |
+| Monster layout stack 0 | 120000 | 132000 | same | |
+| `main_buffer` logical size | 0x1A0000 | 0x1A0000 + 24000 | `PORT_MAIN_BUFFER_EXTRA_QW` | Restores `BuffStageMain` tail when `GetCharaMemAllocSize()` grows |
+| Dungeon stack 1 tail after map load | (varies) | assert ≥ reserves | `DUNGEON_STAGE_STACK2_MIN` (65536), `DUNGEON_STAGE_STACK3_MIN` (`MONSTER_ACTIVE_MAX×4000` + margin) | `PortCheckDungeonStageRestAfterMap` in `dng_event.cpp` |
+
+Script stacks already use `CHARA_SCRIPT_RUNTIME_DELTA` (pointer-width growth). Model stacks use `CHARA_MODEL_LOAD_DELTA` from `port/include/port_memory_budget.hpp`.
+
+When datapack JSON or floor map payloads grow, re-run `CharaMemBudget` / dungeon budget tests and bump the relevant delta or reserve, then update this table.
+
+On PORT, dungeon singletons that must survive floor map loads (`CActiveMonster[MONSTER_ACTIVE_MAX]`, `CEffectScriptMan`, `CMonsterMan`) are allocated from dedicated arenas in `port/src/dungeon_monster_pool.cpp`, not from the `MainBuffer` slab carved for `BuffStageMain`.
+
+`BuffReadData` is **1 000 000** logical quadwords on PORT (retail **200 000**). `LoadMapData` chains `.map`/`.cfg`/`.mpk`/`.sky` into that staging buffer with no retail bounds check; PC datapack floors exceeded 3 MiB and overwrote later `MainBuffer` objects (`TreasureBoxMan`, etc.). `PortAssertDungeonReadCursor` in `sceneload.cpp` aborts if staging walks past the buffer.
 
 Retail places objects in runs with hand-written quadword counts. The placement operators in `port/src/mg_memory.cpp` grow the run to the host object's size while it is still its arena's last, as Dark Cloud 1 does. `arena_placement_test.cpp` lists the 51 literal-count sites whose host object outgrows its run, such as `CCharacter2` (2496 bytes in 0x68 quadwords), and the 8 cast-not-placed runs that nothing can grow: the script stacks `RS_STACKDATA` and `RS_CALLDATA` (`actscript.cpp`, `effscript.cpp`, `event.cpp`, `runscript_opcodes.cpp`) and `mgSORT_PACKET` (`mg_drawprim.cpp`). Each of those overruns its run on the host until `ps2/src` sizes it with `sizeof`.
 
