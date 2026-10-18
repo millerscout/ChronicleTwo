@@ -3274,6 +3274,11 @@ int EdEventStep() {
     }
 
     CameraSeq.Play();
+#ifdef PORT
+    if (PortDungeonCeremonyQoLShouldDoubleResume()) {
+        CameraSeq.Play();
+    }
+#endif
 
     if (Sphida != NULL) {
         Sphida->Step();
