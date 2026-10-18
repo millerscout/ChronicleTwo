@@ -3,48 +3,68 @@
 #include "abs_bank.hpp"
 #include "abs_bank_hud.hpp"
 
+#include "gamepad.hpp"
 #include "gamedata.hpp"
+#include "mainloop.hpp"
 #include "menucls1.hpp"
-#include "menucommon.hpp"
-#include "menumain.hpp"
 #include "menudraw.hpp"
+#include "menucommon.hpp"
 #include "menusys.hpp"
-#include "snd_mngr.hpp"
 
 CMenuItemInfo &ItemMenu() { return class_menu_item_info; }
 
+namespace {
 
-constexpr float kApplyAnalogScale = 1.0f;
+constexpr float kShoulderTransferStep = 4.0f;
 
-void ClampApplyAmount(CGameDataUsed *weapon) {
-    const float room = weapon->data.weapon.abs.max - weapon->data.weapon.abs.now;
-    float       cap = AbsBankBalance();
-    if (room < cap) {
-        cap = room;
-    }
-    if (cap < 0.0f) {
-        cap = 0.0f;
-    }
-    float amount = AbsBankApplyAmount();
-    if (amount > cap) {
-        amount = cap;
-    }
-    if (amount < 0.0f) {
-        amount = 0.0f;
-    }
-    AbsBankSetApplyAmount(amount);
+bool ShoulderHeld(int mask) {
+    // Retail menu keys use pad 0 (On/Down); port shoulder reads for gameplay often use pad 1 (On2).
+    return GamePad__2.On(mask) || GamePad__2.On2(mask);
 }
 
-bool WeaponStatsBankingActive() {
+bool WeaponPanelBankingActive() {
     if (!AbsBankEnabled()) {
         return false;
     }
     CMenuItemInfo &menu = ItemMenu();
-    if (menu.key_arg_no != ITEM_MENU_PANEL_WEAPON_STATS) {
+    if (menu.sub_menu != MENU_ITEM_SUB_MENU_NONE || menu.mode != MENU_ASK_MODE_NONE) {
+        return false;
+    }
+    if (menu.ask_para.ask_mode != MENU_ITEM_EXTEND_NONE) {
+        return false;
+    }
+    if (menu.view_mode != MENU_ITEM_VIEW_WEAPON) {
+        return false;
+    }
+    if (menu.key_arg_no == ITEM_MENU_PANEL_WEAPON_STATS) {
+        return false;
+    }
+    // Main inspect panel, or bag board on the weapon page (gauge still shows view_weapon).
+    if (menu.key_arg_no != ITEM_MENU_PANEL_WEAPON && menu.key_arg_no != ITEM_MENU_PANEL_BAG) {
         return false;
     }
     CGameDataUsed *weapon = menu.view_weapon;
     return weapon != nullptr && weapon->used_type == USED_ITEM_TYPE_WEAPON;
+}
+
+void PlayWeaponLevelUpEffect() { MenuSePlay(SYSTEM_SE_PARAM_UP); }
+
+void PollWeaponPanelShoulderTransfer() {
+    if (!WeaponPanelBankingActive()) {
+        return;
+    }
+    CGameDataUsed *weapon = ItemMenu().view_weapon;
+    if (ShoulderHeld(PAD_R2)) {
+        const int levels_before = weapon->data.weapon.level;
+        if (AbsBankTransferToWeapon(weapon, kShoulderTransferStep) > 0.0f) {
+            if (weapon->data.weapon.level > levels_before) {
+                PlayWeaponLevelUpEffect();
+            }
+        }
+    }
+    if (ShoulderHeld(PAD_L2)) {
+        AbsBankTransferFromWeapon(weapon, kShoulderTransferStep);
+    }
 }
 
 void DrawItemMenuBankBanner() {
@@ -55,83 +75,30 @@ void DrawItemMenuBankBanner() {
     if (menu.sub_menu != MENU_ITEM_SUB_MENU_NONE) {
         return;
     }
-    // Beside the bag gilda readout (top of the item board).
     PortAbsBankDrawMenuBalance(300.0f, 48.0f);
 }
 
-void DrawStatsSpendOverlay() {
-    if (!WeaponStatsBankingActive()) {
+void DrawWeaponPanelBankHint() {
+    if (!WeaponPanelBankingActive()) {
         return;
     }
     CMenuFont  menu_font;
     CMenuFont *font = &menu_font;
-    char       bank_line[0x80];
-    char       text[0x100];
-    PortAbsBankFormatBalance(bank_line, sizeof bank_line);
-    std::sprintf(text, "%s  Apply: %d", bank_line, static_cast<int>(AbsBankApplyAmount()));
-    DrawMenuFillBox(236.0f, 64.0f, 230.0f, 36.0f, 0x80, 0, 0, 0);
-    font->SetStr(text);
+    DrawMenuFillBox(236.0f, 64.0f, 230.0f, 28.0f, 0x80, 0, 0, 0);
+    static char hint[] = "R2: add ABS from bank  L2: refund";
+    font->SetStr(hint);
     font->SetPos(236, 68);
     font->DrawDirect(font->str, font->pos_x, font->pos_y);
-    font->SetStr("Analog: amount  {FD06} Apply");
-    font->SetPos(236, 82);
-    font->DrawDirect(font->str, font->pos_x, font->pos_y);
 }
 
-void PollWeaponStatsAnalog() {
-    if (!WeaponStatsBankingActive()) {
-        return;
-    }
-    CGameDataUsed *weapon = ItemMenu().view_weapon;
-    float          analog[2] = {0.0f, 0.0f};
-    MenuCommonInfo->CheckAnalogKey(0, analog);
-    if (analog[0] == 0.0f) {
-        return;
-    }
-    AbsBankSetApplyAmount(AbsBankApplyAmount() + analog[0] * kApplyAnalogScale);
-    ClampApplyAmount(weapon);
-}
-
-bool HandleWeaponStatsInput(int trigger) {
-    if (!WeaponStatsBankingActive()) {
-        return false;
-    }
-    CGameDataUsed *weapon = ItemMenu().view_weapon;
-    if (trigger == 0) {
-        return false;
-    }
-    if (trigger & MENU_PUSH_BUTTON_CANCEL) {
-        AbsBankResetApplyAmount();
-        return false;
-    }
-    if (trigger & MENU_PUSH_BUTTON_DECIDE) {
-        if (AbsBankApplyToWeapon(weapon)) {
-            MenuSePlay(SYSTEM_SE_DECIDE);
-        } else {
-            MenuSePlay(SYSTEM_SE_DENIED);
-        }
-        ClampApplyAmount(weapon);
-        return true;
-    }
-    if (trigger & (MENU_PUSH_BUTTON_TRIANGLE | MENU_PUSH_BUTTON_SQUARE)) {
-        return true;
-    }
-    return false;
-}
+} // namespace
 
 void PortAbsBankDrawItemMenuOverlays() {
     DrawItemMenuBankBanner();
-    DrawStatsSpendOverlay();
+    DrawWeaponPanelBankHint();
 }
 
 PORT_OVERRIDE void CMenuItemInfo::KeyStepLocal(int select_key, int push_button, int flag) {
-    PollWeaponStatsAnalog();
+    PollWeaponPanelShoulderTransfer();
     PortRetailMenuItemInfoKeyStepLocal(select_key, push_button, flag);
-}
-
-PORT_OVERRIDE int CMenuItemInfo::PushKey(int pad, int trigger) {
-    if (HandleWeaponStatsInput(trigger)) {
-        return 0;
-    }
-    return PortRetailMenuItemInfoPushKey(pad, trigger);
 }

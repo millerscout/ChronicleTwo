@@ -11286,11 +11286,19 @@ int CMenuItemInfo::LRCheck(int key) {
 
     int dir = 0;
 
+#ifdef PORT
+    if (key & MENU_SELECT_KEY_L1) {
+        dir--;
+    } else if (key & MENU_SELECT_KEY_R1) {
+        dir++;
+    }
+#else
     if ((key & MENU_SELECT_KEY_L1) || (key & MENU_SELECT_KEY_L2)) {
         dir--;
     } else if ((key & MENU_SELECT_KEY_R1) || (key & MENU_SELECT_KEY_R2)) {
         dir++;
     }
+#endif
 
     if (dir == 0) {
         return 0;
@@ -11299,8 +11307,11 @@ int CMenuItemInfo::LRCheck(int key) {
     switch (key) {
         case MENU_SELECT_KEY_L1:
         case MENU_SELECT_KEY_R1:
+#ifndef PORT
         case MENU_SELECT_KEY_L2:
-        case MENU_SELECT_KEY_R2: {
+        case MENU_SELECT_KEY_R2:
+#endif
+        {
             int        page_view[8];
             int        page_chara[8];
             int        page_arg_no[8];

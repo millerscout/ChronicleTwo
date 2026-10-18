@@ -511,7 +511,7 @@ Writes are atomic: the file is written as `config.json.tmp` and renamed over `co
 | `game.debug_mode` | bool | false | | the boot debug unlock, and the pad-1 chord; see [DEBUG.md](DEBUG.md) |
 | `game.autosave` | bool | true | | write the autosave on arriving in a town or on a dungeon floor |
 | `game.quick_loadout_title` | string | bar | bar, plate | the quick loadout panel's title on a bar, or on a plate like the EXP gauge's; see [QUICK_LOADOUT.md](QUICK_LOADOUT.md) |
-| `game.abs_bank` | bool | false | | when on, weapon EXP orbs bank into the save sidecar (`mods.chronicle_two.abs_bank.banked_abs`) instead of equipped weapons; the total appears on the dungeon status board (top-right of the HUD) and on the item menu weapon page; spend on the weapon stats sub-panel |
+| `game.abs_bank` | bool | false | | when on, weapon EXP orbs bank into the save sidecar (`mods.chronicle_two.abs_bank.banked_abs`) instead of equipped weapons; the total appears on the dungeon status board and item menu; on the main weapon inspect panel (build-up board), **R2** moves ABS from the bank onto the weapon (auto level-up when full), **L2** refunds ABS from the weapon to the bank without lowering weapon level |
 | `video.present_mode` | string | fifo | fifo, mailbox, immediate | Vulkan present mode |
 | `video.interpolation` | bool | true | | interpolate display frames between ticks |
 | `video.interpolation_draw_budget` | int | 0 | 0 or more | when a tick records more mesh+2D draws than this, skip tweened display frames (0 = never skip). Ordinary towns record 2900-4200 draws |
@@ -780,6 +780,8 @@ sensitivity and inversion do not affect the pointer. Buttons held when entering
 the page must be released before clicking, and a held button cannot become a
 gameplay press when leaving it. Losing window focus cancels the mouse gesture
 without dropping an item. Other inventory submenus retain their existing controls.
+
+On the port, the item menu changes party pages (Max, Monica, Ridepod, Monster) with **L1** and **R1** only. Retail also maps **L2** and **R2** to the same action; the port leaves L2/R2 free for other item-menu uses (for example weapon ABS banking when `game.abs_bank` is on). Default keyboard: **Z** / **F** for L1/R1 page change; **Q** / **R** are L2/R2.
 
 `tools/input/item-menu-mouse.input` replays grid hover and commands at 1280x720
 with `--jump town:10 --fast-load`. Capture frame 700 with

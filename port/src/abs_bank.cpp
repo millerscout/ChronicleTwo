@@ -78,28 +78,69 @@ void AbsBankSetApplyAmount(float amount) { g_apply_amount = amount < 0.0f ? 0.0f
 
 void AbsBankResetApplyAmount() { g_apply_amount = 0.0f; }
 
-bool AbsBankApplyToWeapon(CGameDataUsed *weapon) {
+int AbsBankApplyLevelUps(CGameDataUsed *weapon) {
+    if (weapon == nullptr || weapon->item_no <= 0) {
+        return 0;
+    }
+    int count = 0;
+    for (int guard = 0; guard < 20 && weapon->IsLevelUp() != 0; ++guard) {
+        weapon->LevelUp();
+        ++count;
+    }
+    return count;
+}
+
+float AbsBankWeaponRefundFloor(const CGameDataUsed *weapon) {
     if (weapon == nullptr || weapon->used_type != USED_ITEM_TYPE_WEAPON) {
-        return false;
+        return 0.0f;
+    }
+    // Retail resets abs.now to 0 on level-up; level never decreases when refunding.
+    return 0.0f;
+}
+
+float AbsBankTransferToWeapon(CGameDataUsed *weapon, float amount) {
+    if (weapon == nullptr || weapon->used_type != USED_ITEM_TYPE_WEAPON || amount <= 0.0f) {
+        return 0.0f;
     }
     const float room = WeaponAbsRoom(weapon);
     const float balance = AbsBankBalance();
-    const float cap = room < balance ? room : balance;
-    float           use = g_apply_amount;
-    if (use > cap) {
-        use = cap;
+    float         use = amount;
+    if (use > room) {
+        use = room;
     }
-    if (use <= 0.0f) {
-        return false;
+    if (use > balance) {
+        use = balance;
     }
-    if (!AbsBankDebit(use)) {
-        return false;
+    if (use <= 0.0f || !AbsBankDebit(use)) {
+        return 0.0f;
     }
     weapon->data.weapon.abs.now += use;
-    if (weapon->item_no > 0) {
-        for (int level_ups = 0; level_ups < 20 && weapon->IsLevelUp() != 0; ++level_ups) {
-            weapon->LevelUp();
-        }
+    AbsBankApplyLevelUps(weapon);
+    return use;
+}
+
+float AbsBankTransferFromWeapon(CGameDataUsed *weapon, float amount) {
+    if (weapon == nullptr || weapon->used_type != USED_ITEM_TYPE_WEAPON || amount <= 0.0f) {
+        return 0.0f;
+    }
+    const float floor = AbsBankWeaponRefundFloor(weapon);
+    float         available = weapon->data.weapon.abs.now - floor;
+    if (available <= 0.0f) {
+        return 0.0f;
+    }
+    float refund = amount;
+    if (refund > available) {
+        refund = available;
+    }
+    weapon->data.weapon.abs.now -= refund;
+    AbsBankCredit(refund);
+    return refund;
+}
+
+bool AbsBankApplyToWeapon(CGameDataUsed *weapon) {
+    const float use = AbsBankTransferToWeapon(weapon, g_apply_amount);
+    if (use <= 0.0f) {
+        return false;
     }
     g_apply_amount -= use;
     if (g_apply_amount < 0.0f) {

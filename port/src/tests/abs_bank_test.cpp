@@ -121,6 +121,40 @@ TEST_F(AbsBankTest, OrbCreditIgnoredUntilSaveSlotLoad) {
     SaveSlots = {};
 }
 
+TEST_F(AbsBankTest, TransferToWeaponCapsByGaugeAndBank) {
+    const fs::path image = SaveSlotsRoot() / "BESCES-51190dkcl0";
+    EXPECT_TRUE(SaveExtensionsLoad(image, 1));
+    AbsBankCredit(100.0f);
+
+    CGameDataUsed weapon{};
+    weapon.used_type = USED_ITEM_TYPE_WEAPON;
+    weapon.data.weapon.abs.max = 200.0f;
+    weapon.data.weapon.abs.now = 180.0f;
+
+    EXPECT_FLOAT_EQ(AbsBankTransferToWeapon(&weapon, 50.0f), 20.0f);
+    EXPECT_FLOAT_EQ(weapon.data.weapon.abs.now, 200.0f);
+    EXPECT_FLOAT_EQ(AbsBankBalance(), 80.0f);
+}
+
+TEST_F(AbsBankTest, TransferFromWeaponRefundsWithoutLoweringLevel) {
+    const fs::path image = SaveSlotsRoot() / "BESCES-51190dkcl0";
+    EXPECT_TRUE(SaveExtensionsLoad(image, 1));
+
+    CGameDataUsed weapon{};
+    weapon.used_type = USED_ITEM_TYPE_WEAPON;
+    weapon.data.weapon.level = 3;
+    weapon.data.weapon.abs.max = 200.0f;
+    weapon.data.weapon.abs.now = 40.0f;
+
+    EXPECT_FLOAT_EQ(AbsBankTransferFromWeapon(&weapon, 25.0f), 25.0f);
+    EXPECT_FLOAT_EQ(weapon.data.weapon.abs.now, 15.0f);
+    EXPECT_EQ(weapon.data.weapon.level, 3);
+    EXPECT_FLOAT_EQ(AbsBankBalance(), 25.0f);
+    EXPECT_FLOAT_EQ(AbsBankTransferFromWeapon(&weapon, 100.0f), 15.0f);
+    EXPECT_FLOAT_EQ(weapon.data.weapon.abs.now, 0.0f);
+    EXPECT_EQ(weapon.data.weapon.level, 3);
+}
+
 TEST_F(AbsBankTest, SaveExtensionsRoundTripAfterSpend) {
     EnableBanking();
     const fs::path image = SaveSlotsRoot() / "BESCES-51190dkcl0";
