@@ -7,6 +7,7 @@
 #include "dng_status.hpp"
 #include "gfx/gfx.hpp"
 #include "mglib_port.hpp"
+#include "abs_bank_hud.hpp"
 #include "quick_loadout.hpp"
 #include "scenesnd.hpp"
 #include "userdata.hpp"
@@ -48,4 +49,5 @@ PORT_OVERRIDE void DrawStatusBord() {
 
     mgPortGs().inherit_prim_texture = false;
     PortQuickLoadoutDraw(rate);
+    PortAbsBankDrawDungeonHud(rate);
 }

@@ -11,6 +11,7 @@
 #include "platform/files.hpp"
 #include "platform/paths.hpp"
 #include "play_time.hpp"
+#include "save_extensions.hpp"
 #include "save_slots.hpp"
 #include "title.hpp"
 #include "userdata.hpp"
@@ -97,6 +98,7 @@ bool SaveSlotWriteAutosave(int program_loop_no, AutosaveSpawn *spawn) {
         // A failed directory sync can still leave the new image published; retain both possible matching sidecars.
         return false;
     }
+    SaveExtensionsSave(SaveSlotAutosavePath(), image->unique_counter);
     SaveSlotPruneSpawns(has_spawn ? std::optional<u64>(image->unique_counter) : std::nullopt);
     return true;
 }
@@ -234,6 +236,7 @@ PORT_OVERRIDE int CMemoryCardManager::SaveToMc(int row) {
         error.code = MC_ERROR_FILE;
         return MC_STEP_DONE;
     }
+    SaveExtensionsSave(path, image.unique_counter);
     SaveSlotRefresh(*this, false);
     // A refresh error describes the listing, not the write that succeeded.
     InitError();
@@ -253,6 +256,7 @@ PORT_OVERRIDE int CMemoryCardManager::LoadFromMc(int row) {
     auto image = std::make_unique<SAVEDATA_FORMAT>();
     if (row < 0 || std::cmp_greater_equal(row, SaveSlots.saves.size()) ||
         SaveSlotRead(SaveSlots.saves[row].path, *image) != SaveSlotState::Ready) {
+        SaveExtensionsClear();
         error.code = MC_ERROR_LOAD;
         return MC_STEP_DONE;
     }
@@ -275,6 +279,7 @@ PORT_OVERRIDE int CMemoryCardManager::LoadFromMc(int row) {
         save->tour.base_day = 7;
     }
     PlayTimeReset();
+    SaveExtensionsLoad(SaveSlots.saves[row].path, image->unique_counter);
     total_transferred = transferred = sizeof(*image);
     return MC_STEP_DONE;
 }

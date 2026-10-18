@@ -62,7 +62,12 @@ RETAIL_BRIDGES = {
         ("CBaseMenuClass::MenuItemCommandSelect(int,int)", "MenuItemCommandSelect", "PortRetailMenuItemCommandSelect"),
         ("MenuItemSelectInit(mgCMemory*,int*,int)", "MenuItemSelectInit", "PortRetailMenuItemSelectInit"),
         ("MenuItemSelectDraw()", "MenuItemSelectDraw", "PortRetailMenuItemSelectDraw"),
+        ("CMenuItemInfo::PushKey(int,int)", "PushKey", "PortRetailMenuItemInfoPushKey"),
+        ("CMenuItemInfo::KeyStepLocal(int,int,int)", "KeyStepLocal", "PortRetailMenuItemInfoKeyStepLocal"),
         ("MenuItemDraw()", "MenuItemDraw", "PortRetailMenuItemDraw"),
+    ],
+    "maintex.cpp": [
+        ("AddExpWeaponParam(float,int,int)", "AddExpWeaponParam", "PortRetailAddExpWeaponParam"),
     ],
     "dngmenu.cpp": [
         ("CMenuTreeMap::Step()", "Step", "PortRetailStep"),

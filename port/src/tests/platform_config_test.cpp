@@ -319,6 +319,21 @@ TEST_F(PlatformConfig, AutoUseEventItemRoundTripsThroughSerialize) {
     ASSERT_TRUE(parsed == config);
 }
 
+TEST_F(PlatformConfig, AbsBankParsesBoolsAndDefaultsToOff) {
+    ASSERT_FALSE(Config{}.abs_bank);
+    ASSERT_FALSE(ConfigParse("").abs_bank);
+    ASSERT_FALSE(ConfigParse(R"({"game": {"abs_bank": false}})").abs_bank);
+    ASSERT_TRUE(ConfigParse(R"({"game": {"abs_bank": true}})").abs_bank);
+}
+
+TEST_F(PlatformConfig, AbsBankRoundTripsThroughSerialize) {
+    Config config;
+    config.abs_bank = true;
+    Config parsed = ConfigParse(ConfigSerialize(config));
+    ASSERT_TRUE(parsed.abs_bank);
+    ASSERT_TRUE(parsed == config);
+}
+
 TEST_F(PlatformConfig, WrongTypesKeepTheDefaults) {
     ASSERT_TRUE(ConfigParse(R"({
         "game": {"tick_rate": "50"},

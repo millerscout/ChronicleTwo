@@ -33,10 +33,12 @@ TEST(PcOptions, GameHostBoolsDefaultToOffInOverlay) {
     EXPECT_FALSE(defaults.debug_mode);
     EXPECT_FALSE(defaults.skip_intro);
     EXPECT_FALSE(defaults.auto_use_event_item);
+    EXPECT_FALSE(defaults.abs_bank);
     EXPECT_EQ(Find("game.debug_mode").value(defaults), "Off");
     EXPECT_EQ(Find("game.skip_intro").value(defaults), "Off");
     EXPECT_EQ(Find("game.dungeon_ceremony_qol").value(defaults), "Off");
     EXPECT_EQ(Find("game.auto_use_event_item").value(defaults), "Off");
+    EXPECT_EQ(Find("game.abs_bank").value(defaults), "Off");
     EXPECT_EQ(defaults.georama_poly_multiplier, 1);
     EXPECT_EQ(Find("game.georama_poly_multiplier").label, "Georama budget");
     EXPECT_EQ(Find("game.georama_poly_multiplier").value(defaults), "1×");
@@ -77,6 +79,7 @@ TEST(PcOptions, RequestedSettingsHaveUniqueRowsAndRoundTripTheirEdits) {
         "game.expanded_dungeon_monsters",
         "game.auto_use_event_item",
         "game.floor_info_monsters",
+        "game.abs_bank",
         "game.dungeon_ceremony_qol",
     };
     std::set<std::string> actual;

@@ -511,6 +511,7 @@ Writes are atomic: the file is written as `config.json.tmp` and renamed over `co
 | `game.debug_mode` | bool | false | | the boot debug unlock, and the pad-1 chord; see [DEBUG.md](DEBUG.md) |
 | `game.autosave` | bool | true | | write the autosave on arriving in a town or on a dungeon floor |
 | `game.quick_loadout_title` | string | bar | bar, plate | the quick loadout panel's title on a bar, or on a plate like the EXP gauge's; see [QUICK_LOADOUT.md](QUICK_LOADOUT.md) |
+| `game.abs_bank` | bool | false | | when on, weapon EXP orbs bank into the save sidecar (`mods.chronicle_two.abs_bank.banked_abs`) instead of equipped weapons; the total appears on the dungeon status board (top-right of the HUD) and on the item menu weapon page; spend on the weapon stats sub-panel |
 | `video.present_mode` | string | fifo | fifo, mailbox, immediate | Vulkan present mode |
 | `video.interpolation` | bool | true | | interpolate display frames between ticks |
 | `video.interpolation_draw_budget` | int | 0 | 0 or more | when a tick records more mesh+2D draws than this, skip tweened display frames (0 = never skip). Ordinary towns record 2900-4200 draws |

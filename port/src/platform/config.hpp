@@ -43,7 +43,9 @@ struct Config : HostSettings {
     // When on, event Use Item prompts with a single required id auto-confirm if owned.
     bool         auto_use_event_item = false;
     // game.floor_info_monsters: Triangle on a dungeon floor's information lists its monsters and their drops.
-    bool                     floor_info_monsters = false;
+    bool         floor_info_monsters = false;
+    // When on, weapon EXP orbs bank into the save sidecar instead of going to equipped weapons.
+    bool         abs_bank = false;
     ConfigDungeonCeremonyQoL dungeon_ceremony_qol = ConfigDungeonCeremonyQoL::Off;
     ConfigAspect aspect = ConfigAspect::Auto;
     // video.fps_detail "budget": frame-budget ms lines in the FPS overlay (stored separately from Kazarov's enum).

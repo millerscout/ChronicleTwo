@@ -225,6 +225,9 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
     if (name == "game.floor_info_monsters") {
         return ReadBool(value, config.floor_info_monsters);
     }
+    if (name == "game.abs_bank") {
+        return ReadBool(value, config.abs_bank);
+    }
     if (name == "game.dungeon_ceremony_qol") {
         if (!value.is_string()) {
             return false;
@@ -508,6 +511,7 @@ std::string ConfigSerialize(const Config &config) {
     root["game"]["expanded_dungeon_monsters"] = config.expanded_dungeon_monsters;
     root["game"]["auto_use_event_item"] = config.auto_use_event_item;
     root["game"]["floor_info_monsters"] = config.floor_info_monsters;
+    root["game"]["abs_bank"] = config.abs_bank;
     switch (config.dungeon_ceremony_qol) {
         case ConfigDungeonCeremonyQoL::Manual:
             root["game"]["dungeon_ceremony_qol"] = "manual";

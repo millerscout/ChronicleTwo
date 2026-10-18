@@ -9,6 +9,7 @@
 #include "menucommon.hpp"
 #include "menumain.hpp"
 #include "menusys.hpp"
+#include "abs_bank_hud.hpp"
 #include "menusys_port.hpp"
 #include "platform/config.hpp"
 #include "stubs/menusys.hpp"
@@ -73,4 +74,5 @@ PORT_OVERRIDE void MenuItemSelectDraw() {
 PORT_OVERRIDE void MenuItemDraw() {
     const menuworld::ItemDrawScope scope;
     PortRetailMenuItemDraw();
+    PortAbsBankDrawItemMenuOverlays();
 }

@@ -237,6 +237,10 @@ std::span<const Page> Pages() {
                                                               "Triangle on a floor's info lists its monsters, drops and\n"
                                                               "gate key carrier (spoilers). Off is the original game.",
                                                               {"Off", "On"}),
+                         Choice<&Config::abs_bank>("game.abs_bank", "Bank weapon EXP orbs",
+                                                   "Off is retail: orbs feed equipped weapons.\n"
+                                                   "On: orbs add to a per-save bank you can apply on weapon stats.",
+                                                   {"Off", "On"}),
                      }                      },
     };
     const auto names = port_settings::PcOverlayPageNames();
