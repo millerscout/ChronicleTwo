@@ -1,9 +1,13 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 
 #include "dungeon_ceremony_qol.hpp"
+#include "town_draw_distance.hpp"
+#include "scoop_tracker.hpp"
+#include "pad_remap.hpp"
 #include "platform/settings.hpp"
 
 // Native gameplay always runs at the NTSC field rate, independently of configuration.
@@ -19,6 +23,13 @@ enum class ConfigHaptics {
     Off,       // Classic rumble only.
     Vibration, // The game's own vibration, played on the actuators.
     Full,      // Also camera quakes and the effects of the player, battles and monsters.
+};
+
+// game.ui_theme: the look of port menus built with the UI kit. The order is the PC SETTINGS row's.
+enum class ConfigUiTheme : std::uint8_t {
+    Dc2,       // The retail menu art, read from the game data.
+    Chronicle, // Navy panels with gold trim.
+    Parchment, // Light paper panels with dark text.
 };
 
 struct Config : HostSettings {
@@ -46,7 +57,20 @@ struct Config : HostSettings {
     bool         floor_info_monsters = false;
     // When on, weapon EXP orbs bank into the save sidecar instead of going to equipped weapons.
     bool         abs_bank = false;
+    bool         dungeon_pickup_qol = false;
+    // game.ui_preview: F10, or Select with L1 and R1 held, opens the UI hub preview in town and dungeon play.
+    bool         ui_preview = false;
+    ConfigUiTheme ui_theme = ConfigUiTheme::Dc2;
+    // game.ui_language: "auto" (the game language's catalog) or the tag of a ui/i18n catalog for port text.
+    std::string  ui_language = "auto";
+    // input.pad_remap: physical controller button to PS2 button; only entries off the default are saved.
+    PadRemapTable pad_remap = PadRemapIdentity();
+    // game.language: unset (0) shows the boot picker once; 1–5 are PAL languages.
+    int          game_language = 0;
     ConfigDungeonCeremonyQoL dungeon_ceremony_qol = ConfigDungeonCeremonyQoL::Off;
+    // game.town_draw_distance: retail per-object far cull vs 1.5× in Georama walk (default extended).
+    ConfigTownDrawDistance town_draw_distance = ConfigTownDrawDistance::Extended;
+    ConfigScoopTracker         scoop_tracker = ConfigScoopTracker::Off;
     ConfigAspect aspect = ConfigAspect::Auto;
     // video.fps_detail "budget": frame-budget ms lines in the FPS overlay (stored separately from Kazarov's enum).
     bool         fps_detail_budget = false;

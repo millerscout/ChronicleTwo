@@ -1,8 +1,11 @@
+#include "game_language.hpp"
+
 #include "platform/config.hpp"
 
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <bit>
 #include <cctype>
 #include <cmath>
 #include <cstddef>
@@ -17,9 +20,11 @@
 #include <utility>
 #include <vector>
 
+#include "i18n/i18n.hpp"
 #include "platform/config_io.hpp"
 #include "platform/display.hpp"
 #include "platform/files.hpp"
+#include "platform/log.hpp"
 #include "platform/paths.hpp"
 
 #include "georama_poly_budget.hpp"
@@ -96,8 +101,7 @@ double Shortest(float value) {
 }
 
 void Ignore(std::string_view name, const Json &value) {
-    std::fprintf(stderr, "config.json: ignoring %.*s = %s\n", static_cast<int>(name.size()), name.data(),
-                 value.dump().c_str());
+    CT_LOG_WARN("config.json", "ignoring {} = {}", name, value.dump());
 }
 
 template <class T, class Valid>
@@ -195,6 +199,31 @@ bool ApplyBindings(Config &config, const Json &bindings) {
     return true;
 }
 
+// Taken whole or not at all, so a hand edit can never leave a PS2 button unreachable.
+bool ApplyPadRemap(Config &config, const Json &remap) {
+    if (!remap.is_object()) {
+        return false;
+    }
+    PadRemapTable table = PadRemapIdentity();
+    for (const auto &[physical_name, ps2_name] : remap.items()) {
+        const PadRemapButton *physical = PadRemapFindPhysical(Lower(physical_name));
+        const PadRemapButton *ps2 = ps2_name.is_string() ? PadRemapFindPs2(Lower(ps2_name.get<std::string>())) : nullptr;
+        if (physical == nullptr || ps2 == nullptr) {
+            CT_LOG_WARN("config.json", "input.pad_remap: unknown button in \"{}\": {}; using the default layout",
+                        physical_name, ps2_name.dump());
+            return false;
+        }
+        table[std::countr_zero(physical->bit)] = static_cast<std::uint8_t>(std::countr_zero(ps2->bit));
+    }
+    if (!PadRemapIsPermutation(table)) {
+        CT_LOG_WARN("config.json", "input.pad_remap gives one PS2 button to two controller buttons; "
+                                   "using the default layout");
+        return false;
+    }
+    config.pad_remap = table;
+    return true;
+}
+
 bool Apply(Config &config, std::string_view name, const Json &value) {
     HostSettings &s = config;
     if (name == "game.debug_mode") {
@@ -228,6 +257,65 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
     if (name == "game.abs_bank") {
         return ReadBool(value, config.abs_bank);
     }
+    if (name == "game.dungeon_pickup_qol") {
+        return ReadBool(value, config.dungeon_pickup_qol);
+    }
+    if (name == "game.ui_preview") {
+        return ReadBool(value, config.ui_preview);
+    }
+    if (name == "game.ui_theme") {
+        if (!value.is_string()) {
+            return false;
+        }
+        const std::string theme = value.get<std::string>();
+        if (theme == "dc2") {
+            config.ui_theme = ConfigUiTheme::Dc2;
+        } else if (theme == "chronicle") {
+            config.ui_theme = ConfigUiTheme::Chronicle;
+        } else if (theme == "parchment") {
+            config.ui_theme = ConfigUiTheme::Parchment;
+        } else {
+            return false;
+        }
+        return true;
+    }
+    if (name == "game.ui_language") {
+        if (!value.is_string()) {
+            return false;
+        }
+        const std::string tag = value.get<std::string>();
+        if (tag != i18n::kAuto && !i18n::IsTag(tag)) {
+            return false;
+        }
+        config.ui_language = tag;
+        return true;
+    }
+    if (name == "game.language") {
+        if (!value.is_string()) {
+            return false;
+        }
+        const int language = ConfigParseGameLanguage(value.get<std::string>());
+        if (language == 0) {
+            return false;
+        }
+        config.game_language = language;
+        return true;
+    }
+    if (name == "game.town_draw_distance") {
+        if (!value.is_string()) {
+            return false;
+        }
+        const std::string mode = value.get<std::string>();
+        if (mode == "retail") {
+            config.town_draw_distance = ConfigTownDrawDistance::Retail;
+            return true;
+        }
+        if (mode == "extended") {
+            config.town_draw_distance = ConfigTownDrawDistance::Extended;
+            return true;
+        }
+        return false;
+    }
     if (name == "game.dungeon_ceremony_qol") {
         if (!value.is_string()) {
             return false;
@@ -242,6 +330,22 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
             return true;
         }
         config.dungeon_ceremony_qol = ConfigDungeonCeremonyQoL::Off;
+        return mode == "off";
+    }
+    if (name == "game.scoop_tracker") {
+        if (!value.is_string()) {
+            return false;
+        }
+        const std::string mode = value.get<std::string>();
+        if (mode == "minimal") {
+            config.scoop_tracker = ConfigScoopTracker::Minimal;
+            return true;
+        }
+        if (mode == "full") {
+            config.scoop_tracker = ConfigScoopTracker::Full;
+            return true;
+        }
+        config.scoop_tracker = ConfigScoopTracker::Off;
         return mode == "off";
     }
     if (name == "video.present_mode") {
@@ -401,6 +505,9 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
     if (name == "input.bindings") {
         return ApplyBindings(config, value);
     }
+    if (name == "input.pad_remap") {
+        return ApplyPadRemap(config, value);
+    }
     return false;
 }
 
@@ -477,8 +584,7 @@ Config ConfigParse(std::string_view text) {
     }
     Json root = Json::parse(text, nullptr, false, true);
     if (!root.is_object()) {
-        std::fprintf(stderr, "config.json: %s; using the defaults\n",
-                     root.is_discarded() ? "not valid JSON" : "expected an object");
+        CT_LOG_WARN("config.json", "{}; using the defaults", root.is_discarded() ? "not valid JSON" : "expected an object");
         return config;
     }
     for (const auto &[section, keys] : root.items()) {
@@ -512,6 +618,33 @@ std::string ConfigSerialize(const Config &config) {
     root["game"]["auto_use_event_item"] = config.auto_use_event_item;
     root["game"]["floor_info_monsters"] = config.floor_info_monsters;
     root["game"]["abs_bank"] = config.abs_bank;
+    root["game"]["dungeon_pickup_qol"] = config.dungeon_pickup_qol;
+    root["game"]["ui_preview"] = config.ui_preview;
+    switch (config.ui_theme) {
+        case ConfigUiTheme::Chronicle:
+            root["game"]["ui_theme"] = "chronicle";
+            break;
+        case ConfigUiTheme::Parchment:
+            root["game"]["ui_theme"] = "parchment";
+            break;
+        default:
+            root["game"]["ui_theme"] = "dc2";
+            break;
+    }
+    if (config.ui_language != i18n::kAuto) {
+        root["game"]["ui_language"] = config.ui_language;
+    }
+    if (config.game_language != 0) {
+        root["game"]["language"] = ConfigGameLanguageString(config.game_language);
+    }
+    switch (config.town_draw_distance) {
+        case ConfigTownDrawDistance::Retail:
+            root["game"]["town_draw_distance"] = "retail";
+            break;
+        default:
+            root["game"]["town_draw_distance"] = "extended";
+            break;
+    }
     switch (config.dungeon_ceremony_qol) {
         case ConfigDungeonCeremonyQoL::Manual:
             root["game"]["dungeon_ceremony_qol"] = "manual";
@@ -521,6 +654,17 @@ std::string ConfigSerialize(const Config &config) {
             break;
         default:
             root["game"]["dungeon_ceremony_qol"] = "off";
+            break;
+    }
+    switch (config.scoop_tracker) {
+        case ConfigScoopTracker::Minimal:
+            root["game"]["scoop_tracker"] = "minimal";
+            break;
+        case ConfigScoopTracker::Full:
+            root["game"]["scoop_tracker"] = "full";
+            break;
+        default:
+            root["game"]["scoop_tracker"] = "off";
             break;
     }
     root["video"]["present_mode"] = kPresentModeNames[static_cast<std::size_t>(s.present_mode)];
@@ -566,6 +710,19 @@ std::string ConfigSerialize(const Config &config) {
     root["input"]["glyph_device"] = kGlyphDeviceNames[static_cast<std::size_t>(s.glyph_device)];
     root["input"]["mouse_release"] = s.mouse_release_keys;
     root["input"]["bindings"] = std::move(bindings);
+    Json remap = Json::object();
+    for (const PadRemapButton &button : PadRemapButtons()) {
+        const int to = config.pad_remap[std::countr_zero(button.bit)];
+        if (to != std::countr_zero(button.bit)) {
+            const auto ps2 = std::ranges::find_if(PadRemapButtons(), [&](const PadRemapButton &b) {
+                return std::countr_zero(b.bit) == to;
+            });
+            remap[button.physical] = ps2->ps2;
+        }
+    }
+    if (!remap.empty()) {
+        root["input"]["pad_remap"] = std::move(remap);
+    }
     return root.dump(4) + "\n";
 }
 
@@ -623,7 +780,7 @@ bool ConfigSave() {
         g_have_persisted = true;
     }
     if (!g_saved) {
-        std::fprintf(stderr, "config: could not save %s\n", PathsDisplay(path).c_str());
+        CT_LOG_WARN("config", "could not save {}", PathsDisplay(path));
     }
     return g_saved;
 }
@@ -641,8 +798,7 @@ bool ConfigLoad() {
     }
     std::string text;
     if (error || !std::filesystem::is_regular_file(status) || !ReadConfig(path, text)) {
-        std::fprintf(stderr, "config: could not read %s; using defaults and leaving it untouched\n",
-                     PathsDisplay(path).c_str());
+        CT_LOG_WARN("config", "could not read {}; using defaults and leaving it untouched", PathsDisplay(path));
         g_config = Config{};
         g_saved = false;
         g_keep_file = true;

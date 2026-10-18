@@ -4,10 +4,12 @@
 #include <set>
 #include <string>
 
+#include "mainloop.hpp"
 #include "options/registry.hpp"
 #include "options/rows.hpp"
 #include "options/screen.hpp"
 #include "platform/input.hpp"
+#include "town_draw_distance.hpp"
 
 namespace {
 int OptionTabCenterX(int page) {
@@ -34,11 +36,18 @@ TEST(PcOptions, GameHostBoolsDefaultToOffInOverlay) {
     EXPECT_FALSE(defaults.skip_intro);
     EXPECT_FALSE(defaults.auto_use_event_item);
     EXPECT_FALSE(defaults.abs_bank);
+    EXPECT_FALSE(defaults.dungeon_pickup_qol);
+    EXPECT_FALSE(defaults.ui_preview);
+    EXPECT_EQ(Find("game.ui_preview").value(defaults), "Off");
     EXPECT_EQ(Find("game.debug_mode").value(defaults), "Off");
     EXPECT_EQ(Find("game.skip_intro").value(defaults), "Off");
     EXPECT_EQ(Find("game.dungeon_ceremony_qol").value(defaults), "Off");
     EXPECT_EQ(Find("game.auto_use_event_item").value(defaults), "Off");
     EXPECT_EQ(Find("game.abs_bank").value(defaults), "Off");
+    EXPECT_EQ(Find("game.dungeon_pickup_qol").value(defaults), "Off");
+    EXPECT_EQ(defaults.town_draw_distance, ConfigTownDrawDistance::Extended);
+    EXPECT_EQ(Find("game.town_draw_distance").value(defaults), "Extended");
+    EXPECT_EQ(Find("game.scoop_tracker").value(defaults), "Off");
     EXPECT_EQ(defaults.georama_poly_multiplier, 1);
     EXPECT_EQ(Find("game.georama_poly_multiplier").label, "Georama budget");
     EXPECT_EQ(Find("game.georama_poly_multiplier").value(defaults), "1×");
@@ -75,12 +84,19 @@ TEST(PcOptions, RequestedSettingsHaveUniqueRowsAndRoundTripTheirEdits) {
         "game.quick_loadout_title",
         "game.debug_mode",
         "game.skip_intro",
+        "game.language",
         "game.georama_poly_multiplier",
         "game.expanded_dungeon_monsters",
         "game.auto_use_event_item",
         "game.floor_info_monsters",
         "game.abs_bank",
         "game.dungeon_ceremony_qol",
+        "game.dungeon_pickup_qol",
+        "game.town_draw_distance",
+        "game.scoop_tracker",
+        "game.ui_preview",
+        "game.ui_theme",
+        "game.ui_language",
     };
     std::set<std::string> actual;
     for (const auto &page : options::Pages()) {
@@ -90,9 +106,15 @@ TEST(PcOptions, RequestedSettingsHaveUniqueRowsAndRoundTripTheirEdits) {
             if (!row.step) {
                 continue;
             }
+            LanguageCode = LANG_ENGLISH;
             Config config;
             ASSERT_TRUE(options::StepRow(row, config, 1) || options::StepRow(row, config, -1)) << row.key;
-            EXPECT_NE(config, Config{}) << row.key;
+            if (row.key == "game.language") {
+                EXPECT_GE(config.game_language, LANG_ENGLISH);
+                EXPECT_LE(config.game_language, LANG_SPANISH);
+            } else {
+                EXPECT_NE(config, Config{}) << row.key;
+            }
             EXPECT_EQ(ConfigParse(ConfigSerialize(config)), config) << row.key;
             if (row.key != "game.debug_mode") {
                 EXPECT_FALSE(config.debug_mode);
@@ -120,6 +142,42 @@ TEST(PcOptions, CustomNumbersMoveToAdjacentPresetsWithoutChangingOtherSettings) 
     config.max_fps = 0;
     EXPECT_FALSE(options::StepRow(cap, config, -1));
     EXPECT_EQ(cap.value(config), "Unlimited");
+}
+
+TEST(PcOptions, ListRowsReportTheirChoicesAndSelectByIndex) {
+    LanguageCode = LANG_ENGLISH;
+    int lists = 0;
+    for (const auto &page : options::Pages()) {
+        for (const auto &row : page.rows) {
+            if (row.choices.empty()) {
+                EXPECT_FALSE(row.index) << row.key;
+                continue;
+            }
+            ++lists;
+            ASSERT_TRUE(row.index && row.select) << row.key;
+            Config config;
+            const int count = static_cast<int>(row.choices.size());
+            for (int i = 0; i < count; ++i) {
+                row.select(config, i);
+                EXPECT_EQ(row.index(config), i) << row.key;
+                EXPECT_EQ(row.value(config), row.choices[i]) << row.key;
+            }
+            row.select(config, count + 3);
+            EXPECT_EQ(row.index(config), count - 1) << row.key;
+        }
+    }
+    EXPECT_GT(lists, 30);
+    EXPECT_TRUE(Find("audio.master_volume").numeric);
+    EXPECT_EQ(Find("audio.master_volume").choices.size(), 21u);
+    EXPECT_EQ(Find("audio.master_volume").choices[10], "50%");
+    EXPECT_FALSE(Find("game.abs_bank").numeric);
+    EXPECT_EQ(Find("game.abs_bank").choices, (std::vector<std::string>{"Off", "On"}));
+    EXPECT_EQ(Find("game.language").choices.size(), 5u);
+    EXPECT_TRUE(Find("video.width").choices.empty());
+
+    Config hand_edited;
+    hand_edited.max_fps = 137;
+    EXPECT_EQ(Find("video.max_fps").choices[Find("video.max_fps").index(hand_edited)], "144 FPS");
 }
 
 TEST(PcOptions, BooleanAndEnumChoicesWrapInBothDirections) {
@@ -308,6 +366,28 @@ TEST(PcOptions, PromptsFollowBindingsAndControllerFamilyWithoutChangingPadAction
     EXPECT_EQ(InputApplyKeyboardMouse(pad, {}).buttons, kInputCross);
     config.glyphs_new = false;
     EXPECT_EQ(options::ButtonName("cross", config), "Cross");
+}
+
+TEST(PcOptions, ControllerPromptsFollowTheRemapAndKeyboardPromptsDoNot) {
+    Config config;
+    PadRemapAssign(config.pad_remap, kInputCircle, kInputCross);
+    config.glyph_device = ConfigGlyphDevice::Xbox;
+    EXPECT_EQ(options::ButtonName("cross", config), "B");
+    EXPECT_EQ(options::ButtonName("circle", config), "A");
+    config.glyph_device = ConfigGlyphDevice::Switch;
+    EXPECT_EQ(options::ButtonName("cross", config), "A");
+    config.glyph_device = ConfigGlyphDevice::Ps4;
+    EXPECT_EQ(options::ButtonName("cross", config), "Circle");
+    config.glyphs_new = false;
+    EXPECT_EQ(options::ButtonName("cross", config), "Circle");
+    config.glyphs_new = true;
+    config.glyph_device = ConfigGlyphDevice::Keyboard;
+    config.key_bindings = {
+        {"cross", {"K"}}
+    };
+    InputApplyConfig(config);
+    EXPECT_EQ(options::ButtonName("cross", config), "K");
+    InputApplyConfig(Config{});
 }
 
 TEST(PcOptions, ZoomResetHasAVisibleRebindableRow) {

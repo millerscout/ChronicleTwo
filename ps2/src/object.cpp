@@ -7,6 +7,10 @@
 #include "mglib.hpp"
 #include "object.hpp"
 
+#ifdef PORT
+#include "town_draw_distance.hpp"
+#endif
+
 void CObject::GetMatrix(float (*out_matrix)[4]) {
     mgUnitMatrix(out_matrix);
     out_matrix[0][0] = scale[0];
@@ -38,7 +42,12 @@ int CObject::FarClip(float dist, float *out_alpha) {
     speed = fade_speed;
     in_range = 1;
 
-    if (far_dist > 0.0f && dist > far_dist) {
+#ifdef PORT
+    const float far_limit = PortTownEffectiveFarDist(far_dist);
+#else
+    const float far_limit = far_dist;
+#endif
+    if (far_limit > 0.0f && dist > far_limit) {
         in_range = 0;
     }
 
@@ -104,7 +113,12 @@ int CObject::CheckDraw() {
 
     dist = GetCameraDist();
 
-    if (far_dist > 0.0f && dist > far_dist) {
+#ifdef PORT
+    const float far_limit = PortTownEffectiveFarDist(far_dist);
+#else
+    const float far_limit = far_dist;
+#endif
+    if (far_limit > 0.0f && dist > far_limit) {
         return 0;
     }
 

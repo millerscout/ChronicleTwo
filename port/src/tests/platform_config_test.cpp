@@ -9,8 +9,12 @@
 #include <string_view>
 
 #include "dungeon_ceremony_qol.hpp"
+#include "town_draw_distance.hpp"
+#include "scoop_tracker.hpp"
+#include "mainloop.hpp"
 #include "platform/config.hpp"
 #include "platform/config_io.hpp"
+#include "platform/input.hpp"
 #include "platform/paths.hpp"
 #include "platform/settings.hpp"
 #include "platform_fixture.hpp"
@@ -291,6 +295,111 @@ TEST_F(PlatformConfig, AutoUseEventItemParsesBoolsAndDefaultsToOff) {
     ASSERT_TRUE(ConfigParse(R"({"game": {"auto_use_event_item": true}})").auto_use_event_item);
 }
 
+TEST_F(PlatformConfig, TownDrawDistanceParsesModesDefaultsToExtendedAndRoundTrips) {
+    ASSERT_EQ(Config{}.town_draw_distance, ConfigTownDrawDistance::Extended);
+    ASSERT_EQ(ConfigParse("").town_draw_distance, ConfigTownDrawDistance::Extended);
+    ASSERT_EQ(ConfigParse(R"({"game": {"town_draw_distance": "extended"}})").town_draw_distance,
+              ConfigTownDrawDistance::Extended);
+    ASSERT_EQ(ConfigParse(R"({"game": {"town_draw_distance": "retail"}})").town_draw_distance,
+              ConfigTownDrawDistance::Retail);
+    EXPECT_EQ(ConfigParse(R"({"game": {"town_draw_distance": "wide"}})").town_draw_distance,
+              Config{}.town_draw_distance);
+
+    Config config;
+    config.town_draw_distance = ConfigTownDrawDistance::Retail;
+    const auto text = ConfigSerialize(config);
+    EXPECT_EQ(nlohmann::json::parse(text)["game"]["town_draw_distance"], "retail") << text;
+    ASSERT_TRUE(ConfigParse(text) == config);
+}
+
+TEST_F(PlatformConfig, DungeonPickupQoLParsesBoolsAndDefaultsToOff) {
+    ASSERT_FALSE(Config{}.dungeon_pickup_qol);
+    ASSERT_FALSE(ConfigParse(R"({"game": {"dungeon_pickup_qol": false}})").dungeon_pickup_qol);
+    ASSERT_TRUE(ConfigParse(R"({"game": {"dungeon_pickup_qol": true}})").dungeon_pickup_qol);
+    ASSERT_EQ(Config{}.game_language, 0);
+    ASSERT_EQ(ConfigParse(R"({"game": {"language": "italian"}})").game_language, LANG_ITALIAN);
+    ASSERT_EQ(ConfigParse(R"({"game": {"language": "bogus"}})").game_language, 0);
+}
+
+TEST_F(PlatformConfig, UiPreviewParsesBoolsDefaultsToOffAndRoundTrips) {
+    ASSERT_FALSE(Config{}.ui_preview);
+    ASSERT_FALSE(ConfigParse("").ui_preview);
+    ASSERT_FALSE(ConfigParse(R"({"game": {"ui_preview": false}})").ui_preview);
+    ASSERT_TRUE(ConfigParse(R"({"game": {"ui_preview": true}})").ui_preview);
+    Config config;
+    config.ui_preview = true;
+    const auto text = ConfigSerialize(config);
+    EXPECT_EQ(nlohmann::json::parse(text)["game"]["ui_preview"], true) << text;
+    ASSERT_TRUE(ConfigParse(text) == config);
+}
+
+TEST_F(PlatformConfig, UiThemeParsesNamesFallsBackToDc2AndRoundTrips) {
+    ASSERT_EQ(Config{}.ui_theme, ConfigUiTheme::Dc2);
+    EXPECT_EQ(ConfigParse("").ui_theme, ConfigUiTheme::Dc2);
+    EXPECT_EQ(ConfigParse(R"({"game": {"ui_theme": "chronicle"}})").ui_theme, ConfigUiTheme::Chronicle);
+    EXPECT_EQ(ConfigParse(R"({"game": {"ui_theme": "parchment"}})").ui_theme, ConfigUiTheme::Parchment);
+    EXPECT_EQ(ConfigParse(R"({"game": {"ui_theme": "dc2"}})").ui_theme, ConfigUiTheme::Dc2);
+    const Config unknown = ConfigParse(R"({"game": {"ui_theme": "neon"}})");
+    EXPECT_EQ(unknown.ui_theme, ConfigUiTheme::Dc2);
+    EXPECT_EQ(nlohmann::json::parse(ConfigSerialize(unknown))["game"]["ui_theme"], "dc2");
+    EXPECT_EQ(ConfigParse(R"({"game": {"ui_theme": 2}})").ui_theme, ConfigUiTheme::Dc2);
+
+    Config config;
+    config.ui_theme = ConfigUiTheme::Parchment;
+    const auto text = ConfigSerialize(config);
+    EXPECT_EQ(nlohmann::json::parse(text)["game"]["ui_theme"], "parchment") << text;
+    ASSERT_TRUE(ConfigParse(text) == config);
+}
+
+TEST_F(PlatformConfig, UiLanguageIsAutoOrATagAndRoundTrips) {
+    ASSERT_EQ(Config{}.ui_language, "auto");
+    EXPECT_FALSE(nlohmann::json::parse(ConfigSerialize(Config{}))["game"].contains("ui_language"));
+    EXPECT_EQ(ConfigParse(R"({"game": {"ui_language": "de"}})").ui_language, "de");
+    EXPECT_EQ(ConfigParse(R"({"game": {"ui_language": "auto"}})").ui_language, "auto");
+    EXPECT_EQ(ConfigParse(R"({"game": {"ui_language": "not a tag"}})").ui_language, "auto");
+    EXPECT_EQ(ConfigParse(R"({"game": {"ui_language": 3}})").ui_language, "auto");
+
+    Config config;
+    config.ui_language = "pt-BR";
+    const auto text = ConfigSerialize(config);
+    EXPECT_EQ(nlohmann::json::parse(text)["game"]["ui_language"], "pt-BR") << text;
+    ASSERT_TRUE(ConfigParse(text) == config);
+}
+
+TEST_F(PlatformConfig, PadRemapMissingSectionIsTheDefaultLayout) {
+    EXPECT_EQ(ConfigParse("").pad_remap, PadRemapIdentity());
+    EXPECT_EQ(ConfigParse(R"({"input": {}})").pad_remap, PadRemapIdentity());
+    EXPECT_FALSE(nlohmann::json::parse(ConfigSerialize(Config{}))["input"].contains("pad_remap"));
+}
+
+TEST_F(PlatformConfig, PadRemapRoundTripsOnlyItsChangedEntries) {
+    Config config;
+    PadRemapAssign(config.pad_remap, kInputCircle, kInputCross);
+    const auto text = ConfigSerialize(config);
+    const auto remap = nlohmann::json::parse(text)["input"]["pad_remap"];
+    EXPECT_EQ(remap, (nlohmann::json{{"south", "circle"}, {"east", "cross"}})) << text;
+    EXPECT_TRUE(ConfigParse(text) == config);
+    EXPECT_EQ(ConfigParse(R"({"input": {"pad_remap": {"SOUTH": "Circle", "east": "cross"}}})").pad_remap,
+              config.pad_remap);
+}
+
+TEST_F(PlatformConfig, PadRemapIsRejectedWholeOnDuplicatesOrUnknownNames) {
+    EXPECT_EQ(ConfigParse(R"({"input": {"pad_remap": {"south": "cross", "east": "cross"}}})").pad_remap,
+              PadRemapIdentity());
+    EXPECT_EQ(ConfigParse(R"({"input": {"pad_remap": {"south": "circle"}}})").pad_remap, PadRemapIdentity());
+    EXPECT_EQ(ConfigParse(R"({"input": {"pad_remap": {"paddle1": "cross"}}})").pad_remap, PadRemapIdentity());
+    EXPECT_EQ(ConfigParse(R"({"input": {"pad_remap": {"south": 3}}})").pad_remap, PadRemapIdentity());
+    EXPECT_EQ(ConfigParse(R"({"input": {"pad_remap": ["south"]}})").pad_remap, PadRemapIdentity());
+}
+
+TEST_F(PlatformConfig, DungeonPickupQoLRoundTripsThroughSerialize) {
+    Config config;
+    config.dungeon_pickup_qol = true;
+    Config parsed = ConfigParse(ConfigSerialize(config));
+    ASSERT_TRUE(parsed.dungeon_pickup_qol);
+    ASSERT_TRUE(parsed == config);
+}
+
 TEST_F(PlatformConfig, DungeonCeremonyQoLParsesModesAndDefaultsToOff) {
     ASSERT_EQ(Config{}.dungeon_ceremony_qol, ConfigDungeonCeremonyQoL::Off);
     ASSERT_EQ(ConfigParse(R"({"game": {"dungeon_ceremony_qol": "off"}})").dungeon_ceremony_qol,
@@ -308,6 +417,22 @@ TEST_F(PlatformConfig, DungeonCeremonyQoLRoundTripsThroughSerialize) {
     config.dungeon_ceremony_qol = ConfigDungeonCeremonyQoL::Auto;
     Config parsed = ConfigParse(ConfigSerialize(config));
     ASSERT_EQ(parsed.dungeon_ceremony_qol, ConfigDungeonCeremonyQoL::Auto);
+    ASSERT_TRUE(parsed == config);
+}
+
+TEST_F(PlatformConfig, ScoopTrackerParsesModesAndDefaultsToOff) {
+    ASSERT_EQ(Config{}.scoop_tracker, ConfigScoopTracker::Off);
+    ASSERT_EQ(ConfigParse(R"({"game": {"scoop_tracker": "off"}})").scoop_tracker, ConfigScoopTracker::Off);
+    ASSERT_EQ(ConfigParse(R"({"game": {"scoop_tracker": "minimal"}})").scoop_tracker, ConfigScoopTracker::Minimal);
+    ASSERT_EQ(ConfigParse(R"({"game": {"scoop_tracker": "full"}})").scoop_tracker, ConfigScoopTracker::Full);
+    ASSERT_EQ(ConfigParse(R"({"game": {"scoop_tracker": "bogus"}})").scoop_tracker, ConfigScoopTracker::Off);
+}
+
+TEST_F(PlatformConfig, ScoopTrackerRoundTripsThroughSerialize) {
+    Config config;
+    config.scoop_tracker = ConfigScoopTracker::Full;
+    Config parsed = ConfigParse(ConfigSerialize(config));
+    ASSERT_EQ(parsed.scoop_tracker, ConfigScoopTracker::Full);
     ASSERT_TRUE(parsed == config);
 }
 

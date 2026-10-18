@@ -6,10 +6,12 @@
 
 TEST(PortSettingsRegistry, HostBoolsMapToConfigKeysAndRetailRows) {
     const auto entries = port_settings::Descriptors();
-    ASSERT_EQ(entries.size(), 5u);
+    ASSERT_EQ(entries.size(), 11u);
 
     const auto *debug = port_settings::FindByConfigKey("game.debug_mode");
     const auto *ceremony = port_settings::FindByConfigKey("game.dungeon_ceremony_qol");
+    const auto *pickup = port_settings::FindByConfigKey("game.dungeon_pickup_qol");
+    const auto *scoop = port_settings::FindByConfigKey("game.scoop_tracker");
     const auto *skip = port_settings::FindByConfigKey("game.skip_intro");
     ASSERT_NE(debug, nullptr);
     ASSERT_NE(skip, nullptr);
@@ -31,6 +33,47 @@ TEST(PortSettingsRegistry, HostBoolsMapToConfigKeysAndRetailRows) {
     EXPECT_EQ(ceremony->retail_row, OPTION_ITEM_DUNGEON_CEREMONY_QOL);
     EXPECT_TRUE(port_settings::HasSurface(ceremony->surfaces, port_settings::Surface::Retail));
     EXPECT_TRUE(port_settings::HasSurface(ceremony->surfaces, port_settings::Surface::PcOverlay));
+
+    ASSERT_NE(pickup, nullptr);
+    EXPECT_STREQ(pickup->id, "dungeon_pickup_qol");
+    EXPECT_EQ(pickup->retail_row, OPTION_ITEM_DUNGEON_PICKUP_QOL);
+    EXPECT_TRUE(port_settings::HasSurface(pickup->surfaces, port_settings::Surface::Retail));
+    EXPECT_TRUE(port_settings::HasSurface(pickup->surfaces, port_settings::Surface::PcOverlay));
+
+    ASSERT_NE(scoop, nullptr);
+    EXPECT_STREQ(scoop->id, "scoop_tracker");
+    EXPECT_EQ(scoop->retail_row, OPTION_ITEM_SCOOP_TRACKER);
+    EXPECT_TRUE(port_settings::HasSurface(scoop->surfaces, port_settings::Surface::Retail));
+    EXPECT_TRUE(port_settings::HasSurface(scoop->surfaces, port_settings::Surface::PcOverlay));
+
+    const auto *town_draw = port_settings::FindByConfigKey("game.town_draw_distance");
+    ASSERT_NE(town_draw, nullptr);
+    EXPECT_STREQ(town_draw->id, "town_draw_distance");
+    EXPECT_EQ(town_draw->kind, port_settings::Kind::Int);
+    EXPECT_EQ(town_draw->retail_row, -1);
+    EXPECT_FALSE(port_settings::HasSurface(town_draw->surfaces, port_settings::Surface::Retail));
+    EXPECT_TRUE(port_settings::HasSurface(town_draw->surfaces, port_settings::Surface::PcOverlay));
+
+    const auto *preview = port_settings::FindByConfigKey("game.ui_preview");
+    ASSERT_NE(preview, nullptr);
+    EXPECT_STREQ(preview->id, "ui_preview");
+    EXPECT_EQ(preview->kind, port_settings::Kind::Bool);
+    EXPECT_EQ(preview->retail_row, -1);
+    EXPECT_FALSE(port_settings::HasSurface(preview->surfaces, port_settings::Surface::Retail));
+    EXPECT_TRUE(port_settings::HasSurface(preview->surfaces, port_settings::Surface::PcOverlay));
+
+    const auto *theme = port_settings::FindByConfigKey("game.ui_theme");
+    ASSERT_NE(theme, nullptr);
+    EXPECT_STREQ(theme->id, "ui_theme");
+    EXPECT_EQ(theme->kind, port_settings::Kind::Int);
+    EXPECT_EQ(theme->retail_row, -1);
+    EXPECT_TRUE(port_settings::HasSurface(theme->surfaces, port_settings::Surface::PcOverlay));
+
+    const auto *ui_language = port_settings::FindByConfigKey("game.ui_language");
+    ASSERT_NE(ui_language, nullptr);
+    EXPECT_STREQ(ui_language->id, "ui_language");
+    EXPECT_EQ(ui_language->retail_row, -1);
+    EXPECT_FALSE(port_settings::HasSurface(ui_language->surfaces, port_settings::Surface::Retail));
 }
 
 TEST(PortSettingsRegistry, PcOverlayPageCountMatchesPagesBuilder) {

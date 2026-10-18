@@ -3,11 +3,14 @@
 #include <cassert>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <format>
 #include <type_traits>
 #include <utility>
 
+#include "i18n/i18n.hpp"
+#include "mainloop.hpp"
 #include "options/registry.hpp"
 #include "platform/input.hpp"
 
@@ -32,19 +35,43 @@ Row Choice(const char *key, const char *label, const char *help, std::vector<std
         const int n = static_cast<int>(names.size());
         c.*Member = static_cast<Value>((static_cast<int>(c.*Member) + direction + n) % n);
     };
+    row.choices = names;
+    row.index = [](const Config &c) { return static_cast<int>(c.*Member); };
+    row.select = [n = static_cast<int>(names.size())](Config &c, int index) {
+        c.*Member = static_cast<Value>(std::clamp(index, 0, n - 1));
+    };
     return row;
+}
+
+std::string NumberText(double n, double display_scale, const char *suffix) {
+    if (n == 0 && std::string_view(suffix) == " FPS") {
+        return "Unlimited";
+    }
+    return std::format("{:.3g}{}", n * display_scale, suffix);
 }
 
 template <auto Member>
 Row Number(const char *key, const char *label, const char *help, std::vector<double> values,
            double display_scale = 1.0, const char *suffix = "") {
     Row row{key, label, help};
-    row.value = [display_scale, suffix](const Config &c) {
-        const double n = c.*Member;
-        if (n == 0 && std::string_view(suffix) == " FPS") {
-            return std::string("Unlimited");
+    row.value = [display_scale, suffix](const Config &c) { return NumberText(c.*Member, display_scale, suffix); };
+    for (double n : values) {
+        row.choices.push_back(NumberText(n, display_scale, suffix));
+    }
+    row.numeric = true;
+    // A hand-edited value sits at the nearest preset.
+    row.index = [values](const Config &c) {
+        const double current = c.*Member;
+        int          best = 0;
+        for (int i = 1; i < static_cast<int>(values.size()); ++i) {
+            if (std::abs(values[i] - current) < std::abs(values[best] - current)) {
+                best = i;
+            }
         }
-        return std::format("{:.3g}{}", n * display_scale, suffix);
+        return best;
+    };
+    row.select = [values](Config &c, int index) {
+        c.*Member = values[std::clamp(index, 0, static_cast<int>(values.size()) - 1)];
     };
     row.step = [values](Config &c, int direction) {
         // Preserve a hand-edited value until this row is changed. Move to the next preset,
@@ -66,6 +93,81 @@ Row Number(const char *key, const char *label, const char *help, std::vector<dou
             }
         }
     };
+    return row;
+}
+
+Row GameLanguage() {
+    static constexpr const char *kNames[] = {"English", "French", "German", "Italian", "Spanish"};
+    Row           row{"game.language", "Language",
+                      "PAL game text and voices.\nSkips the boot language screen when set.\n"
+                      "Active events may keep the previous language until you reload."};
+    row.value = [](const Config &c) {
+        const int language =
+            c.game_language >= LANG_ENGLISH && c.game_language <= LANG_SPANISH ? c.game_language : LanguageCode;
+        return std::string(kNames[language - 1]);
+    };
+    row.step = [](Config &c, int direction) {
+        int language = c.game_language >= LANG_ENGLISH && c.game_language <= LANG_SPANISH ? c.game_language
+                                                                                          : LanguageCode;
+        language = (language - LANG_ENGLISH + direction + 5) % 5 + LANG_ENGLISH;
+        c.game_language = language;
+    };
+    row.choices.assign(std::begin(kNames), std::end(kNames));
+    row.index = [](const Config &c) {
+        const int language =
+            c.game_language >= LANG_ENGLISH && c.game_language <= LANG_SPANISH ? c.game_language : LanguageCode;
+        return language - LANG_ENGLISH;
+    };
+    row.select = [](Config &c, int index) { c.game_language = LANG_ENGLISH + std::clamp(index, 0, 4); };
+    return row;
+}
+
+constexpr const char *kUiLanguageAuto = "Auto (game language)";
+
+// Choice 0 is auto; choice i is catalog i - 1.
+int UiLanguageIndex(const Config &c) {
+    const auto catalogs = i18n::Catalogs();
+    for (std::size_t i = 0; i < catalogs.size(); ++i) {
+        if (catalogs[i].tag == c.ui_language) {
+            return static_cast<int>(i) + 1;
+        }
+    }
+    return 0;
+}
+
+void SelectUiLanguage(Config &c, int index) {
+    const auto catalogs = i18n::Catalogs();
+    index = std::clamp(index, 0, static_cast<int>(catalogs.size()));
+    if (index == 0) {
+        c.ui_language = std::string(i18n::kAuto);
+        return;
+    }
+    c.ui_language = catalogs[index - 1].tag;
+    c.game_language = catalogs[index - 1].game_language;
+}
+
+std::vector<std::string> UiLanguageChoices() {
+    std::vector<std::string> names{kUiLanguageAuto};
+    for (const auto &catalog : i18n::Catalogs()) {
+        names.push_back(catalog.name);
+    }
+    return names;
+}
+
+Row UiLanguage() {
+    Row row{"game.ui_language", "UI language",
+            "Language of the port's own menus. Auto follows the game language.\n"
+            "Picking a language also sets the game language it names."};
+    row.value = [](const Config &c) {
+        const int index = UiLanguageIndex(c);
+        return index == 0 ? std::string(kUiLanguageAuto) : i18n::Catalogs()[index - 1].name;
+    };
+    row.step = [](Config &c, int direction) {
+        const int n = static_cast<int>(i18n::Catalogs().size()) + 1;
+        SelectUiLanguage(c, (UiLanguageIndex(c) + direction + n) % n);
+    };
+    row.index = UiLanguageIndex;
+    row.select = SelectUiLanguage;
     return row;
 }
 
@@ -147,10 +249,9 @@ std::vector<Row> Bindings() {
     return rows;
 }
 
-} // namespace
-
-std::span<const Page> Pages() {
-    static const std::vector<Page> pages{
+// The pages without the catalog list, which the English table is built from before catalogs load.
+std::vector<Page> &BuiltPages() {
+    static std::vector<Page> pages{
         {"Display",  {
                         Choice<&Config::fullscreen>("video.fullscreen", "Window mode", "Applies immediately. Fullscreen uses the desktop.", {"Windowed", "Fullscreen"}),
                         Resolution(),
@@ -201,6 +302,8 @@ std::span<const Page> Pages() {
                          Choice<&Config::skip_intro>("game.skip_intro", "Skip intro",
                                                      "Skips the Sony and Level-5 logos at boot and on the title screen.",
                                                      {"Off", "On"}),
+                         GameLanguage(),
+                         UiLanguage(),
                          Choice<&Config::expanded_dungeon_monsters>("game.expanded_dungeon_monsters",
                                                                     "Expanded dungeon monsters",
                                                                     "Raises the active monster cap from 24 to 60 and shows\n"
@@ -222,6 +325,10 @@ std::span<const Page> Pages() {
                                  }
                                  c.georama_poly_multiplier = next;
                              };
+                             row.choices = {"1×", "2×", "3×", "4×", "5×", "6×"};
+                             row.numeric = true;
+                             row.index = [](const Config &c) { return std::clamp(c.georama_poly_multiplier, 1, 6) - 1; };
+                             row.select = [](Config &c, int index) { c.georama_poly_multiplier = std::clamp(index, 0, 5) + 1; };
                              return row;
                          }(),
                          Choice<&Config::dungeon_ceremony_qol>("game.dungeon_ceremony_qol", "Fast dungeon ceremonies",
@@ -229,6 +336,18 @@ std::span<const Page> Pages() {
                                                               "confirm to finish ceremony text.\nAuto: instant "
                                                               "ceremony text.",
                                                               {"Off", "Manual", "Auto"}),
+                         Choice<&Config::dungeon_pickup_qol>("game.dungeon_pickup_qol", "Snappy dungeon pickups",
+                                                             "Off is retail.\nOn: wider magnet, faster vacuum, loot "
+                                                             "never fades, and leftover pickups collect at the exit door.",
+                                                             {"Off", "On"}),
+                         Choice<&Config::town_draw_distance>("game.town_draw_distance", "Town draw distance",
+                                                             "Retail uses PS2 far cull distances.\nExtended draws town "
+                                                             "NPCs and parts 1.5× farther while walking (default).",
+                                                             {"Retail", "Extended"}),
+                         Choice<&Config::scoop_tracker>("game.scoop_tracker", "Scoop photo tracker",
+                                                          "Off is retail (no markers).\nMinimal: camera icon while a "
+                                                          "scoop photo window is open.\nFull: icon plus scoop name.",
+                                                          {"Off", "Minimal", "Full"}),
                          Choice<&Config::auto_use_event_item>("game.auto_use_event_item", "Auto-use event items",
                                                               "Default Off. When On, events that ask for one specific item\n"
                                                               "you already have skip the item picker grid.",
@@ -241,6 +360,14 @@ std::span<const Page> Pages() {
                                                    "Off is retail: orbs feed equipped weapons.\n"
                                                    "On: orbs add to a per-save bank you can apply on weapon stats.",
                                                    {"Off", "On"}),
+                         Choice<&Config::ui_preview>("game.ui_preview", "UI hub preview",
+                                                     "Test build of the new menu, on sample data only.\n"
+                                                     "On: F10, or Select with L1+R1 held, opens it in town or dungeons.",
+                                                     {"Off", "On"}),
+                         Choice<&Config::ui_theme>("game.ui_theme", "UI theme",
+                                                   "The look of the new menu. Dark Cloud 2 uses the game's own\n"
+                                                   "menu art and changes as soon as you pick it.",
+                                                   {"Dark Cloud 2", "Chronicle", "Parchment"}),
                      }                      },
     };
     const auto names = port_settings::PcOverlayPageNames();
@@ -249,6 +376,92 @@ std::span<const Page> Pages() {
         assert(pages[i].name == names[i]);
     }
     return pages;
+}
+
+std::string TextKey(const Row &row, std::string_view part) {
+    if (part == "help" && row.key.starts_with("input.bindings.")) {
+        return "options.input.bindings.help";
+    }
+    return std::format("options.{}.{}", row.key, part);
+}
+
+std::string PageKey(const Page &page) {
+    std::string key = std::format("options.page.{}", page.name);
+    std::ranges::transform(key, key.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return key;
+}
+
+// Rows whose choices are numbers or names that are not translated.
+bool ChoicesTranslate(const Row &row) {
+    return !row.numeric && row.index && row.key != "game.ui_language";
+}
+
+} // namespace
+
+std::span<const Page> Pages() {
+    auto &pages = BuiltPages();
+    // Catalogs can be reloaded after the pages are built.
+    for (auto &page : pages) {
+        for (auto &row : page.rows) {
+            if (row.key == "game.ui_language") {
+                row.choices = UiLanguageChoices();
+            }
+        }
+    }
+    return pages;
+}
+
+std::string_view PageName(const Page &page, i18n::Drawable drawable) {
+    return i18n::Tr(PageKey(page), drawable);
+}
+
+std::string_view RowLabel(const Row &row, i18n::Drawable drawable) {
+    return i18n::Tr(TextKey(row, "label"), drawable);
+}
+
+std::string_view RowHelp(const Row &row, i18n::Drawable drawable) {
+    return i18n::Tr(TextKey(row, "help"), drawable);
+}
+
+std::string RowValue(const Row &row, const Config &config, i18n::Drawable drawable) {
+    if (row.key == "video.width" && config.window_width == 0 && config.window_height == 0) {
+        return std::string(i18n::Tr("options.video.width.desktop", drawable));
+    }
+    if (row.key == "game.ui_language") {
+        const int index = UiLanguageIndex(config);
+        if (index == 0) {
+            return std::string(i18n::Tr("options.game.ui_language.auto", drawable));
+        }
+        const auto &catalog = i18n::Catalogs()[index - 1];
+        return drawable == nullptr || drawable(catalog.name) ? catalog.name : catalog.tag;
+    }
+    if (ChoicesTranslate(row)) {
+        const int index = row.index(config);
+        if (index >= 0 && index < static_cast<int>(row.choices.size())) {
+            return std::string(i18n::Tr(TextKey(row, std::format("choice.{}", index)), drawable));
+        }
+    }
+    return row.value(config);
+}
+
+std::vector<std::pair<std::string, std::string>> EnglishText() {
+    std::vector<std::pair<std::string, std::string>> text;
+    for (const auto &page : BuiltPages()) {
+        text.emplace_back(PageKey(page), page.name);
+        for (const auto &row : page.rows) {
+            text.emplace_back(TextKey(row, "label"), row.label);
+            if (const auto help = TextKey(row, "help");
+                std::ranges::find(text, help, &std::pair<std::string, std::string>::first) == text.end()) {
+                text.emplace_back(help, row.help);
+            }
+            if (ChoicesTranslate(row)) {
+                for (std::size_t i = 0; i < row.choices.size(); ++i) {
+                    text.emplace_back(TextKey(row, std::format("choice.{}", i)), row.choices[i]);
+                }
+            }
+        }
+    }
+    return text;
 }
 
 bool StepRow(const Row &row, Config &config, int direction) {
@@ -345,6 +558,7 @@ std::string ButtonName(std::string_view action, const Config &config) {
         const std::string bindings = InputBindingLabel(action);
         return bindings.substr(0, bindings.find(", "));
     }
+    action = PadRemapGlyphFor(config.pad_remap, action);
     const bool xbox = device == ConfigGlyphDevice::Xbox || device == ConfigGlyphDevice::SteamDeck || device == ConfigGlyphDevice::SteamController;
     const bool sw = device == ConfigGlyphDevice::Switch;
     if (action == "cross") {
