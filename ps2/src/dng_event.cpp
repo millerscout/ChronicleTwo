@@ -28,7 +28,6 @@
 #include "mainloop.hpp"
 #ifdef PORT
 #include "port_memory_budget.hpp"
-#include "port_monster_limit.hpp"
 #endif
 #include "maintex.hpp"
 #include "mapinfo.hpp"

@@ -54,10 +54,6 @@ RETAIL_BRIDGES = {
         ("CMenuItemInfo::KeyStepLocal(int,int,int)", "KeyStepLocal", "PortRetailMenuItemInfoKeyStepLocal"),
         ("MenuItemDraw()", "MenuItemDraw", "PortRetailMenuItemDraw"),
     ],
-    "dngmenu.cpp": [
-        ("CMenuTreeMap::Step()", "Step", "PortRetailStep"),
-        ("CMenuTreeMap::Draw()", "Draw", "PortRetailDraw"),
-    ],
     "menuchr.cpp": [
         ("InitMainCharaBG(int,mgCMemory*,int)", "InitMainCharaBG", "PortRetailInitMainCharaBG"),
         ("KeyMainCharaBG()", "KeyMainCharaBG", "PortRetailKeyMainCharaBG"),
