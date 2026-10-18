@@ -21,6 +21,8 @@ void PortDungeonCeremonyQoLOnEventEnd();
 
 void PortDungeonCeremonyQoLEventFrame();
 
+void PortDungeonCeremonyQoLAccelerateMessageOpen(ClsMes *mes);
+
 bool PortDungeonCeremonyQoLShouldDoubleResume();
 
 float PortDungeonCeremonyQoLMotionStepScale(float step);
@@ -32,6 +34,7 @@ inline bool                     PortIsDungeonCeremonyQoLActive() { return false;
 inline void                     PortDungeonCeremonyQoLOnEventStart(int) {}
 inline void                     PortDungeonCeremonyQoLOnEventEnd() {}
 inline void                     PortDungeonCeremonyQoLEventFrame() {}
+inline void                     PortDungeonCeremonyQoLAccelerateMessageOpen(ClsMes *) {}
 inline bool                     PortDungeonCeremonyQoLShouldDoubleResume() { return false; }
 inline float                    PortDungeonCeremonyQoLMotionStepScale(float step) { return step; }
 

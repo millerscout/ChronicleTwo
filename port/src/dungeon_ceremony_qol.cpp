@@ -8,6 +8,7 @@
 #include "nd_meswin.hpp"
 #include "padcontrol.hpp"
 #include "platform/config.hpp"
+#include "sysmes.hpp"
 
 namespace {
 
@@ -45,11 +46,53 @@ void CompleteRevealIfNeeded(ClsMes *mes) {
     mes->CompleteReveal();
 }
 
+void AccelerateMessageOpen(ClsMes *mes, ConfigDungeonCeremonyQoL mode) {
+    if (mes == nullptr || mes->fade >= 1.0f) {
+        return;
+    }
+
+    if (mode == ConfigDungeonCeremonyQoL::Auto) {
+        mes->fade = 1.0f;
+        return;
+    }
+
+    if (mes->fade_speed <= 0.0f) {
+        mes->fade = 1.0f;
+        return;
+    }
+
+    if (mes->open != 0) {
+        mes->fade += mes->fade_speed;
+        if (mes->fade > 1.0f) {
+            mes->fade = 1.0f;
+        }
+        return;
+    }
+
+    if (mes->fade > 0.0f) {
+        mes->fade -= mes->fade_speed;
+        if (mes->fade < 0.0f) {
+            mes->fade = 0.0f;
+        }
+    }
+}
+
+void AccelerateCeremonyMessages(ConfigDungeonCeremonyQoL mode) {
+    for (int i = 0; i < 2; ++i) {
+        AccelerateMessageOpen(GetEventMessage(i), mode);
+    }
+    for (int i = 0; i < 3; ++i) {
+        AccelerateMessageOpen(GetSystemMessage(i), mode);
+    }
+}
+
 void ProcessEventMessages() {
     const auto mode = PortDungeonCeremonyQoLMode();
     if (!CeremonyContextActive()) {
         return;
     }
+
+    AccelerateCeremonyMessages(mode);
 
     if (mode == ConfigDungeonCeremonyQoL::Auto) {
         CompleteRevealIfNeeded(GetEventMessage(0));
@@ -79,6 +122,13 @@ void PortDungeonCeremonyQoLOnEventStart(int event_no) { g_ceremony_event_no = ev
 void PortDungeonCeremonyQoLOnEventEnd() { g_ceremony_event_no = -1; }
 
 void PortDungeonCeremonyQoLEventFrame() { ProcessEventMessages(); }
+
+void PortDungeonCeremonyQoLAccelerateMessageOpen(ClsMes *mes) {
+    if (!CeremonyContextActive()) {
+        return;
+    }
+    AccelerateMessageOpen(mes, PortDungeonCeremonyQoLMode());
+}
 
 bool PortDungeonCeremonyQoLShouldDoubleResume() { return CeremonyContextActive(); }
 

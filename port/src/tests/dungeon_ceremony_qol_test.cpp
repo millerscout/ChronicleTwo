@@ -8,7 +8,7 @@
 
 TEST(DungeonCeremonyQoL, CompleteRevealFinishesTypewriter) {
     ClsMes mes;
-    mes.Initialize();
+    mes.Init();
     mes.char_num = 12;
     mes.reveal_num = 3;
     mes.reveal = 3.5f;
@@ -18,6 +18,44 @@ TEST(DungeonCeremonyQoL, CompleteRevealFinishesTypewriter) {
     EXPECT_EQ(mes.reveal_num, mes.char_num);
     EXPECT_EQ(mes.wait, 0);
     EXPECT_FLOAT_EQ(mes.reveal, static_cast<float>(mes.char_num));
+}
+
+TEST(DungeonCeremonyQoL, ManualAcceleratesMessageWindowOpenFade) {
+    Config config;
+    config.dungeon_ceremony_qol = ConfigDungeonCeremonyQoL::Manual;
+    ConfigChange(config);
+    PortLoopNo = LOOP_DUNGEON;
+    DngStatus.mode = DNG_STATUS_EVENT;
+    PortDungeonCeremonyQoLOnEventStart(DNG_EVENT_TREASURE_BOX);
+
+    ClsMes mes;
+    mes.open = 1;
+    mes.fade = 0.0f;
+    mes.fade_speed = 0.1f;
+    PortDungeonCeremonyQoLAccelerateMessageOpen(&mes);
+    EXPECT_FLOAT_EQ(mes.fade, 0.1f);
+
+    PortDungeonCeremonyQoLOnEventEnd();
+    PortLoopNo = LOOP_TITLE;
+}
+
+TEST(DungeonCeremonyQoL, AutoSnapsMessageWindowOpenFade) {
+    Config config;
+    config.dungeon_ceremony_qol = ConfigDungeonCeremonyQoL::Auto;
+    ConfigChange(config);
+    PortLoopNo = LOOP_DUNGEON;
+    DngStatus.mode = DNG_STATUS_EVENT;
+    PortDungeonCeremonyQoLOnEventStart(DNG_EVENT_TREASURE_BOX);
+
+    ClsMes mes;
+    mes.open = 1;
+    mes.fade = 0.2f;
+    mes.fade_speed = 0.1f;
+    PortDungeonCeremonyQoLAccelerateMessageOpen(&mes);
+    EXPECT_FLOAT_EQ(mes.fade, 1.0f);
+
+    PortDungeonCeremonyQoLOnEventEnd();
+    PortLoopNo = LOOP_TITLE;
 }
 
 TEST(DungeonCeremonyQoL, GatingRespectsModeAndEvent) {
