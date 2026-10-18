@@ -10,6 +10,7 @@
 #include "mainloop.hpp"
 #include "nd_meswin.hpp"
 #include "options/retail_system_mes.hpp"
+#include "platform/legacy_encoding.hpp"
 
 // The PAL disc's menu and system messages describe PS2 memory cards, their slots and the console.
 // The PC port keeps saves, the photo album and Extras data in folders, so the messages that
@@ -403,12 +404,8 @@ void Append(std::vector<std::uint16_t> &out, char32_t ch) {
         out.push_back(kCodeNewline);
     } else if (ch == ' ') {
         out.push_back(kCodeSpace);
-    } else if (ch > 0x20 && ch < 0x5C) {
-        out.push_back(static_cast<std::uint16_t>(ch - 0x20));
-    } else if (ch > 0x5C && ch < 0x7F) {
-        out.push_back(static_cast<std::uint16_t>(ch - 0x21));
-    } else if (ch >= 0xA0 && ch <= 0xFF) {
-        out.push_back(static_cast<std::uint16_t>(0xFF00 | ch));
+    } else if (const auto code = legacy_encoding::GlyphCode(ch)) {
+        out.push_back(*code);
     }
 }
 
