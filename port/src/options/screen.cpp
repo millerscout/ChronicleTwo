@@ -6,6 +6,7 @@
 #include <cmath>
 #include <string>
 
+#include "game_language.hpp"
 #include "gamepad.hpp"
 #include "mainloop.hpp"
 #include "menu_mouse.hpp"
@@ -16,6 +17,7 @@
 #include "menuop.hpp"
 #include "menusys.hpp"
 #include "port_options.hpp"
+#include "options/apply.hpp"
 #include "options/config_bool.hpp"
 #include "options/rows.hpp"
 #include "options/screen.hpp"
@@ -25,6 +27,7 @@
 #include "platform/mouse.hpp"
 #include "platform/window.hpp"
 #include "snd_mngr.hpp"
+#include "title.hpp"
 
 extern CMenuOption *PortMenuOption asm("MenuOption_Current");
 
@@ -48,18 +51,16 @@ bool Inside(float x, float y, float left, float top, float right, float bottom) 
 
 const Row &CurrentRow() { return Pages()[g_screen.page].rows[g_screen.row[g_screen.page]]; }
 
-void Save(const Config &config) {
-    g_screen.save_failed = !DisplayApply([&] { return ConfigChange(config); });
+void Note(const ApplyResult &result) {
+    if (result.changed) {
+        g_screen.save_failed = !result.saved;
+    }
 }
 
 void Change(int direction) {
-    Config       config = ConfigGet();
-    const Row   &row = CurrentRow();
-    if (StepRow(row, config, direction)) {
-        if (row.key == "game.debug_mode") {
-            port_settings::WriteConfigBool(config, row.key, config.debug_mode);
-        }
-        Save(config);
+    const ApplyResult result = ApplyRowStep(CurrentRow(), direction);
+    Note(result);
+    if (result.changed) {
         MenuSePlay(SYSTEM_SE_CURSOR);
     }
 }
@@ -115,12 +116,9 @@ void Activate(const Hit &hit) {
         case HitKind::Back:
             Close();
             break;
-        case HitKind::ResetBinding: {
-            Config config = ConfigGet();
-            ResetBinding(config, CurrentRow().action);
-            Save(config);
+        case HitKind::ResetBinding:
+            Note(ResetRowBinding(CurrentRow().action));
             break;
-        }
         default:
             break;
     }
@@ -194,10 +192,7 @@ bool Run() {
         }
         const std::string key = InputTakeBindKey(false);
         if (!key.empty()) {
-            Config config = ConfigGet();
-            if (SetBinding(config, CurrentRow().action, key)) {
-                Save(config);
-            }
+            Note(ApplyBinding(CurrentRow().action, key));
             g_screen.binding = -1;
             g_wait_source = key;
             g_drain = true;

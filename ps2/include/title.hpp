@@ -403,6 +403,13 @@ int TitleLangSelKey();
 
 /**
  *
+ * Sets the language index used by @ref GetSelectLanguageNo without running the boot picker.
+ *
+ */
+void TitleLangSelSetLanguage(int language);
+
+/**
+ *
  * Draws the language selection: the language rows, the cursor and the
  * fade.
  *

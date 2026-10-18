@@ -17,6 +17,7 @@
 #include "editdata.hpp"
 #include "editloop.hpp"
 #include "font.hpp"
+#include "game_language.hpp"
 #include "gaiji.hpp"
 #include "gamedata.hpp"
 #include "gamepad.hpp"
@@ -24,6 +25,7 @@
 #include "inventmn.hpp"
 #include "menuchr_port.hpp"
 #include "quick_loadout.hpp"
+#include "title.hpp"
 #include "item_icon3d.hpp"
 #include "main.hpp"
 #include "mainloop.hpp"
@@ -211,7 +213,12 @@ PORT_OVERRIDE void MainLoop() {
     mgInit(MG_SCREEN_MODE_512X480, 3);
     PortPlayTimeCountFlag = false;
     mgInitVSyncCallBack(PortPlayTimeVSyncCallback);
-    LanguageCode = GameHasJump() ? LANG_ENGLISH : LANG_FRENCH;
+    if (const int configured = PortConfiguredGameLanguage(); configured != 0) {
+        LanguageCode = configured;
+        TitleLangSelSetLanguage(configured);
+    } else {
+        LanguageCode = GameHasJump() ? LANG_ENGLISH : LANG_FRENCH;
+    }
     if (!GameHasJump()) {
         SCElogoFade(0, memory);
     }

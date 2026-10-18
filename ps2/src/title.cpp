@@ -3294,6 +3294,12 @@ int GetSelectLanguageNo() {
     return title_lang_select + 1;
 }
 
+void TitleLangSelSetLanguage(int language) {
+    if (language >= 1 && language <= 5) {
+        title_lang_select = language - 1;
+    }
+}
+
 void TitleLangSelDraw() {
     if (lang_tex != NULL) {
         mgTexManager.ReloadTexture(lang_tex->block, (sceVif1Packet *) NULL);

@@ -10,6 +10,7 @@
 #include "nowload.hpp"
 #include "nowload_port.hpp"
 #include "padcontrol.hpp"
+#include "game_language.hpp"
 #include "platform/config.hpp"
 #include "test_hooks.hpp"
 #include "title.hpp"
@@ -42,17 +43,24 @@ PORT_OVERRIDE void SCElogoFade(int fade_out, mgCMemory *memory) {
     if (!fade_out) {
         GamePad__2.WaitEnable();
         GamePad__2.UpDate();
-        TitleLangSelInit(memory);
+        language = PortConfiguredGameLanguage();
+        if (language != 0) {
+            TitleLangSelSetLanguage(language);
+            LanguageCode = language;
+        } else {
+            TitleLangSelInit(memory);
 
-        do {
-            mgBeginFrame(NULL);
-            language = TitleLangSelKey();
-            TitleLangSelDraw();
-            GamePad__2.UpDate();
-            mgEndFrame(NULL);
-        } while (!(0 < language));
+            do {
+                mgBeginFrame(NULL);
+                language = TitleLangSelKey();
+                TitleLangSelDraw();
+                GamePad__2.UpDate();
+                mgEndFrame(NULL);
+            } while (!(0 < language));
 
-        LanguageCode = language;
+            LanguageCode = language;
+            PortPersistGameLanguage(language);
+        }
         char path[0x80];
         sprintf(path, "title/title%d.img", language);
         int image_size;
