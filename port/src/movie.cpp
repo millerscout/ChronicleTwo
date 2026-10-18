@@ -7,8 +7,8 @@
 #include <cstdio>
 #include <filesystem>
 #include <optional>
-#include <print>
 #include <string>
+#include <utility>
 
 #include "audio/mixer.hpp"
 #include "audio_assets.hpp"
@@ -38,6 +38,8 @@ struct MovieState {
     bool                  loop = false;
     bool                  with_audio = false;
     bool                  audio_on = false;
+    int                   retail_width = 0;
+    int                   retail_height = 0;
     int64_t               start_tick = 0;
     gfx::TextureHandle    uploaded_to = gfx::kNullTexture;
     bool                  dirty = false;
@@ -72,9 +74,12 @@ void MovieUpload() {
     if (texture == nullptr) {
         return;
     }
-    // A 2x or 4x replacement fills the texture at that many host texels per retail texel, so the game's quad, which
-    // keeps its retail texel coordinates, shows the whole picture over the same area.
-    MgTextureSetPhysicalScale(texture, static_cast<uint32_t>(g_movie.player.Scale()));
+    // A 2x or 4x replacement fills the texture at that many host texels per retail texel; the game's quad keeps
+    // its retail coordinates and so shows the whole picture over the same area.
+    const int scale = MoviePortFit(g_movie.retail_width, g_movie.retail_height, g_movie.player.Width(),
+                                   g_movie.player.Height())
+                          .scale;
+    MgTextureSetPhysicalScale(texture, static_cast<uint32_t>(scale));
     const gfx::TextureHandle target = mgPortFindTexture(texture).texture;
     if (target == gfx::kNullTexture || (!g_movie.dirty && target == g_movie.uploaded_to)) {
         return;
@@ -108,6 +113,8 @@ void MovieReset() {
     g_movie.loop = false;
     g_movie.with_audio = false;
     g_movie.audio_on = false;
+    g_movie.retail_width = 0;
+    g_movie.retail_height = 0;
     g_movie.start_tick = 0;
     g_movie.uploaded_to = gfx::kNullTexture;
     g_movie.dirty = false;
@@ -145,22 +152,38 @@ std::filesystem::path MoviePortPath(const char *name) {
     return rel.starts_with("movie/") ? native : std::filesystem::path("movie") / native;
 }
 
+MoviePortPicture MoviePortFit(int retail_width, int retail_height, int width, int height) {
+    if (retail_width <= 0 || retail_height <= 0) {
+        return {width, height, 1};
+    }
+    int scale = kMoviePortMaxScale;
+    while (scale > 1 && (width < retail_width * scale || height < retail_height * scale)) {
+        scale /= 2;
+    }
+    return {retail_width * scale, retail_height * scale, scale};
+}
+
 // The retail pools are replaced by the host's allocator. init_sound would reset the PS2 sound driver, which the
-// shared mixer does not need. The width and height are the retail picture size, which a replacement can multiply.
-PORT_OVERRIDE void CMovie::Load(char *name, mgCMemory ** /*unused*/, int width, int height, bool with_audio, bool loop, bool /*unused*/) {
+// shared mixer does not need. The width and height are the retail picture size, which a replacement multiplies.
+PORT_OVERRIDE void CMovie::Load(char *name, mgCMemory **, int width, int height, bool with_audio, bool loop, bool) {
     Term();
     g_movie.loaded = true;
     g_movie.path = MoviePortPath(name);
     g_movie.with_audio = with_audio;
     g_movie.loop = loop;
-    g_movie.player.SetRetailSize(width, height);
+    g_movie.retail_width = width;
+    g_movie.retail_height = height;
+    g_movie.player.SetPictureFit([width, height](int picture_width, int picture_height) {
+        const MoviePortPicture fit = MoviePortFit(width, height, picture_width, picture_height);
+        return std::pair{fit.width, fit.height};
+    });
     g_movie.opened = g_movie.player.Open(g_movie.path, with_audio);
     if (!g_movie.opened) {
-        std::println(stderr, "movie: {} not found or not a playable MP4 ({})", name,
-                     PathsDisplay(g_movie.path));
+        std::fprintf(stderr, "movie: %s not found or not a playable MP4 (%s)\n", name,
+                     PathsDisplay(g_movie.path).c_str());
     } else if (g_movie.player.SourceWidth() != g_movie.player.Width() ||
                g_movie.player.SourceHeight() != g_movie.player.Height()) {
-        std::println(stderr, "movie: {} is {}x{}; a replacement should be 1, 2 or 4 times {}x{}, so it is resampled to {}x{}",
+        std::fprintf(stderr, "movie: %s is %dx%d; a replacement should be 1, 2 or 4 times %dx%d, so it is shown resampled to %dx%d\n",
                      name, g_movie.player.SourceWidth(), g_movie.player.SourceHeight(), width, height,
                      g_movie.player.Width(), g_movie.player.Height());
     }

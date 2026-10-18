@@ -136,36 +136,9 @@ TEST(CameraMouse, CameraOwnershipRejectsScriptsLocksOtherViewsAndOtherCameras) {
     camera.rot_cancel = 0;
     camera.ControlOff();
     EXPECT_FALSE(TownMouseCameraOwns(&camera, &scene, &pad, true, false, false));
-}
-
-TEST(CameraMouse, TownMouseKeepsTurningAfterAnEventTurnsFollowOff) {
-    auto    camera = Camera();
-    CScene &scene = *GetMainScene();
-    scene.AssignCamera(0, &camera, const_cast<char *>("MainCam"));
-    scene.active_camera = 0;
-    scene.event_run = 0;
-    PortLoopNo = LOOP_EDIT;
-    GamePad__2.key_lock = 0;
-    CPadControl pad{};
-    // A door event, a map event (the prologue's bench couple) or the entry event
-    // after a world map move turns the walking camera's follow off with
-    // _INITIALIZE or EventDoorLoop; town control only turns control back on.
-    camera.FollowOff();
-    EXPECT_TRUE(TownMouseCameraOwns(&camera, &scene, &pad, true, false, false));
-    camera.ControlOff();
-    EXPECT_FALSE(TownMouseCameraOwns(&camera, &scene, &pad, true, false, false));
     camera.ControlOn();
-    InputResetBindings();
-    InputPadState input{.connected = true};
-    InputSetOverride(0, &input);
-    InputSetScriptedDevices({.mouse_dx = 400});
-    InputLatchPad(0);
-    pad.Initialize();
-    float rotation[4]{};
-    camera.MoveCamera(&pad, rotation, nullptr, 0);
-    EXPECT_LT(camera.pos[0], -60);
-    InputSetScriptedDevices({});
-    InputSetOverride(0, nullptr);
+    camera.FollowOff();
+    EXPECT_FALSE(TownMouseCameraOwns(&camera, &scene, &pad, true, false, false));
 }
 
 TEST(CameraMouse, TownControlConsumesOneSampleAndDoesNotReplayLockedMotion) {
@@ -256,7 +229,7 @@ public:
     int calls = 0;
     int polygons = 0;
 
-    int GetCameraPoly(CCPoly *out, mgVu0FBOX & /*box*/, int maximum) override {
+    int GetCameraPoly(CCPoly *out, mgVu0FBOX &, int maximum) override {
         ++calls;
         const int written = std::min(polygons, maximum);
         for (int i = 0; i < written; ++i) {
@@ -270,8 +243,7 @@ public:
 TEST(CameraMouse, AFullMapCollectorCannotEnterTheNextMapWithZeroCapacity) {
     CScene scene;
     scene.event_run = 0;
-    CapacityMap first;
-    CapacityMap second;
+    CapacityMap first, second;
     first.polygons = 8;
     second.polygons = 1;
     scene.AssignMap(0, &first, const_cast<char *>("first"));
@@ -321,14 +293,14 @@ TEST(CameraMouse, DungeonActionsKeepRightStickAndDirectMouseFollowControl) {
     };
 
     const Action actions[] = {
-        {.name = "standing",         .hold = ACTION_HOLD_NONE,  .menu = 1, .guard = 0, .gun = 0, .lock = 0, .landed = 1},
-        {.name = "carrying stone",   .hold = ACTION_HOLD_STONE, .menu = 0, .guard = 0, .gun = 0, .lock = 0, .landed = 1},
-        {.name = "carrying enemy",   .hold = ACTION_HOLD_ENEMY, .menu = 0, .guard = 0, .gun = 0, .lock = 0, .landed = 1},
-        {.name = "holding item",     .hold = ACTION_HOLD_ITEM,  .menu = 0, .guard = 0, .gun = 0, .lock = 0, .landed = 1},
-        {.name = "guarding",         .hold = ACTION_HOLD_NONE,  .menu = 0, .guard = 1, .gun = 0, .lock = 0, .landed = 1},
-        {.name = "aiming",           .hold = ACTION_HOLD_NONE,  .menu = 0, .guard = 0, .gun = 1, .lock = 0, .landed = 1},
-        {.name = "aiming locked on", .hold = ACTION_HOLD_NONE,  .menu = 0, .guard = 0, .gun = 1, .lock = 1, .landed = 1},
-        {.name = "falling",          .hold = ACTION_HOLD_NONE,  .menu = 0, .guard = 0, .gun = 0, .lock = 0, .landed = 0},
+        {"standing",         ACTION_HOLD_NONE,  1, 0, 0, 0, 1},
+        {"carrying stone",   ACTION_HOLD_STONE, 0, 0, 0, 0, 1},
+        {"carrying enemy",   ACTION_HOLD_ENEMY, 0, 0, 0, 0, 1},
+        {"holding item",     ACTION_HOLD_ITEM,  0, 0, 0, 0, 1},
+        {"guarding",         ACTION_HOLD_NONE,  0, 1, 0, 0, 1},
+        {"aiming",           ACTION_HOLD_NONE,  0, 0, 1, 0, 1},
+        {"aiming locked on", ACTION_HOLD_NONE,  0, 0, 1, 1, 1},
+        {"falling",          ACTION_HOLD_NONE,  0, 0, 0, 0, 0},
     };
     for (const auto &action : actions) {
         SCOPED_TRACE(action.name);
@@ -393,7 +365,7 @@ TEST(CameraMouse, DungeonOwnershipKeepsAuthoredModesButAllowsPlayerActions) {
     auto &[camera, scene, pad, area, status, chara] = gate;
     auto owns = [&] { return gate.Owns(); };
     EXPECT_TRUE(owns());
-    for (int mode : {static_cast<int>(DNG_CAMERA_BOSS), static_cast<int>(DNG_CAMERA_ARENA), 3}) {
+    for (int mode : {int(DNG_CAMERA_BOSS), int(DNG_CAMERA_ARENA), 3}) {
         area.camera_mode = mode;
         EXPECT_FALSE(owns());
     }
@@ -468,15 +440,11 @@ TEST(CameraMouse, DungeonFollowOwnershipSurvivesTheDeathEventsFollowOff) {
     status.eye_view = 1;
     EXPECT_FALSE(owns(false));
     EXPECT_TRUE(owns(true));
-    // Town walking control runs without follow as well.
-    EXPECT_TRUE(TownMouseCameraOwns(&camera, &scene, &pad, true, false, false));
+    // Town walking still keeps follow as part of its camera mode.
+    EXPECT_FALSE(TownMouseCameraOwns(&camera, &scene, &pad, true, false, false));
 }
 
-namespace {
-
 class DungeonEyeMouse : public testing::TestWithParam<bool> {};
-
-} // namespace
 
 TEST_P(DungeonEyeMouse, LookIsImmediateBoundedAndDoesNotQueueMenuMotion) {
     const unsigned old_photo = TakePhotoMode;
@@ -486,8 +454,7 @@ TEST_P(DungeonEyeMouse, LookIsImmediateBoundedAndDoesNotQueueMenuMotion) {
     auto       *old_area = BattleAreaScene;
     auto       *old_chara = MainChara__2;
     const auto  old_status = DngStatus;
-    const float old_yaw = viewAngleH__2;
-    const float old_pitch = viewAngleV__2;
+    const float old_yaw = viewAngleH__2, old_pitch = viewAngleV__2;
     CScene      scene;
     scene.event_run = 0;
     DNG_BATTLE_AREA area{};
@@ -564,8 +531,7 @@ INSTANTIATE_TEST_SUITE_P(EyeAndPhoto, DungeonEyeMouse, testing::Bool());
 
 TEST(CameraMouse, EyeLimitsPreserveControllerOvershootAndInvalidSamples) {
     auto  camera = Camera();
-    float heading = 0;
-    float tilt = 0.67f;
+    float heading = 0, tilt = 0.67f;
     EXPECT_TRUE(MouseCameraEye(camera, heading, tilt, 0.1f, 0));
     EXPECT_FLOAT_EQ(tilt, 0.67f);
     EXPECT_TRUE(MouseCameraEye(camera, heading, tilt, 0, 0.01f));

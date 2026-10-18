@@ -31,6 +31,7 @@
 // clang-format off
 #include "dngfloor.hpp"
 #include "dngmenu.hpp"
+#include "stubs/dngmenu.hpp"
 // clang-format on
 
 using namespace dc::test;
@@ -41,7 +42,7 @@ class AspectRenderer {
 public:
     AspectRenderer(int width, int height) {
         SetEnv("VK_LAYER_VALIDATE_SYNC", "1", 0);
-        WindowConfig window{.width = width, .height = height, .headless = true};
+        WindowConfig window{width, height, true};
         window.vulkan = false;
         WindowInit(window);
 
@@ -125,8 +126,8 @@ void ExpectQuadAtLogicalPlace(int width, int height) {
     ASSERT_LE(min_y, max_y);
 
     const gfx::LogicalMapping mapping = gfx::GetLogicalMapping(gfx::kMainTarget);
-    const double              tol_x = std::max<double>(1.0, 1.0 / mapping.scale_x);
-    const double              tol_y = std::max<double>(1.0, 1.0 / mapping.scale_y);
+    const double tol_x = std::max<double>(1.0, 1.0 / mapping.scale_x);
+    const double tol_y = std::max<double>(1.0, 1.0 / mapping.scale_y);
 
     const double left = (static_cast<double>(min_x) - mapping.offset_x) / mapping.scale_x;
     const double right = (static_cast<double>(max_x + 1) - mapping.offset_x) / mapping.scale_x;
@@ -254,12 +255,11 @@ TEST(MglibAspect, FrameBorderStaysAtVisibleEdges) {
     PortDrawFrameBorder();
     mgEndFrame(nullptr);
     std::vector<uint8_t> rgba;
-    uint32_t             width = 0;
-    uint32_t             height = 0;
+    uint32_t             width = 0, height = 0;
     ASSERT_TRUE(mgPortCanonicalReadColor(gfx::kMainTarget, rgba, width, height));
     ASSERT_EQ(width, 1920u);
     ASSERT_EQ(height, 1080u);
-    // Both 4:3 frame boundaries are interior pixels of the expanded scene.
+    // Both old 4:3 boundaries are interior pixels of the expanded scene.
     const auto mapping = gfx::GetLogicalMapping(gfx::kMainTarget);
     for (float edge : {0.0f, 511.0f}) {
         const int x = static_cast<int>(mapping.offset_x + edge * mapping.scale_x);
@@ -270,15 +270,12 @@ TEST(MglibAspect, FrameBorderStaysAtVisibleEdges) {
     }
 }
 
-namespace {
 // The menu backdrop is 704 pixels wide and slides left by 192 pixels for the
 // item page. Its lens at texture x=350 must land at logical x=158, alongside
 // the model, even though the backdrop covers the entire logical frame.
-void ExpectMenuLensAtRetailPosition(int window_width, int window_height) {
+static void ExpectMenuLensAtRetailPosition(int window_width, int window_height) {
     AspectRenderer         renderer(window_width, window_height);
-    std::vector<u_long128> arena(4096);
-    std::vector<u_long128> pixels(1024 * 512 * 4 / 16);
-    std::vector<u_long128> ornament(64 * 64 * 4 / 16);
+    std::vector<u_long128> arena(4096), pixels(1024 * 512 * 4 / 16), ornament(64 * 64 * 4 / 16);
     mgCMemory              memory;
     memory.stSetBuffer(arena.data(), static_cast<int>(arena.size()));
     mgTexManager.SetTableBuffer(16, 4, &memory);
@@ -299,8 +296,7 @@ void ExpectMenuLensAtRetailPosition(int window_width, int window_height) {
         }
     }
     u_long128 *levels[MG_TEXTURE_LEVEL_MAX] = {pixels.data()};
-    char       background_name[] = "bg16";
-    char       ornament_name[] = "mnmain";
+    char       background_name[] = "bg16", ornament_name[] = "mnmain";
     ASSERT_NE(mgTexManager.EnterTexture(0, background_name, levels, 1024, 512, 32, nullptr, 0, 0), nullptr);
     levels[0] = ornament.data();
     ASSERT_NE(mgTexManager.EnterTexture(0, ornament_name, levels, 64, 64, 32, nullptr, 0, 0), nullptr);
@@ -320,13 +316,9 @@ void ExpectMenuLensAtRetailPosition(int window_width, int window_height) {
     MenuMainFrameDraw(loaded_texture, 128);
     mgEndFrame(nullptr);
     std::vector<uint8_t> image;
-    uint32_t             width = 0;
-    uint32_t             height = 0;
+    uint32_t             width = 0, height = 0;
     ASSERT_TRUE(mgPortCanonicalReadColor(gfx::kMainTarget, image, width, height));
-    uint32_t min_x = width;
-    uint32_t max_x = 0;
-    uint32_t min_y = height;
-    uint32_t max_y = 0;
+    uint32_t min_x = width, max_x = 0, min_y = height, max_y = 0;
     for (uint32_t y = 0; y < height; ++y) {
         for (uint32_t x = 0; x < width; ++x) {
             if (image[(static_cast<size_t>(y) * width + x) * 4] > 200) {
@@ -343,10 +335,17 @@ void ExpectMenuLensAtRetailPosition(int window_width, int window_height) {
     EXPECT_NEAR(((min_y + max_y + 1) * 0.5f - mapping.offset_y) / mapping.scale_y, 240.0f, 1.0f);
     // The continuation uses the artwork near the right edge, while the lens
     // and all interior artwork stay in place.
-    EXPECT_GT(image[(static_cast<size_t>(height / 2) * width + width - 2) * 4 + 1], 200);
+    EXPECT_GT(max_x, min_x);
+    const bool wide_window =
+        static_cast<int64_t>(window_width) * 3 > static_cast<int64_t>(window_height) * 4;
+    const size_t row = static_cast<size_t>(height / 2) * width;
+    if (wide_window) {
+        EXPECT_GT(image[(row + width - 2) * 4 + 1], 200);
+    } else {
+        EXPECT_GT(image[(row + max_x) * 4], 200);
+    }
     mgTexManager.Initialize(0x1000, -1);
 }
-} // namespace
 
 TEST(MglibAspect, ItemMenuLensStaysWithModelAtSixteenNine) {
     ExpectMenuLensAtRetailPosition(1920, 1080);
@@ -400,10 +399,8 @@ TEST(MglibAspect, MenuFormsHideParkedStatsWithoutClippingEnteringPanel) {
         int state = -1;
         form.MenuFormDraw(state);
         // A following independent draw must still reach the wide flank.
-        auto             a = QuadCorner(-75, 50);
-        auto             b = QuadCorner(-50, 50);
-        auto             c = QuadCorner(-50, 75);
-        auto             d = QuadCorner(-75, 75);
+        auto             a = QuadCorner(-75, 50), b = QuadCorner(-50, 50);
+        auto             c = QuadCorner(-50, 75), d = QuadCorner(-75, 75);
         const std::array outside{a, b, c, d};
         gfx::DrawState   outside_state{};
         outside_state.depth_test = gfx::DepthTest::Always;
@@ -411,8 +408,7 @@ TEST(MglibAspect, MenuFormsHideParkedStatsWithoutClippingEnteringPanel) {
         mgPortDraw2D(gfx::Primitive::Quads, outside, {}, outside_state);
         mgEndFrame(nullptr);
         std::vector<uint8_t> rgba;
-        uint32_t             width = 0;
-        uint32_t             height = 0;
+        uint32_t             width = 0, height = 0;
         ASSERT_TRUE(mgPortCanonicalReadColor(gfx::kMainTarget, rgba, width, height));
         const auto pixel = [&](float px, float py, int channel) {
             const int sx = static_cast<int>(mapping.offset_x + px * mapping.scale_x);
@@ -450,21 +446,20 @@ TEST(MglibAspect, MenuFormsHideParkedStatsWithoutClippingEnteringPanel) {
     form.MenuFormDraw(state);
     mgEndFrame(nullptr);
     std::vector<uint8_t> rgba;
-    uint32_t             width = 0;
-    uint32_t             height = 0;
+    uint32_t             width = 0, height = 0;
     ASSERT_TRUE(mgPortCanonicalReadColor(gfx::kMainTarget, rgba, width, height));
     EXPECT_GT(rgba[(static_cast<size_t>(height / 2) * width + 100) * 4 + 1], 200);
     MenuPosData = saved_layout;
 }
 
-namespace {
-void ExpectMenuBackdropContinuation(int window_width, int window_height, int page = 0, std::initializer_list<int> y_offsets = {0}) {
-    const bool             character = page == 1;
-    const bool             invent = page == 2;
-    const bool             options = page == 3;
+static void ExpectMenuBackdropContinuation(int window_width, int window_height, int page = 0,
+                                           std::initializer_list<int> y_offsets = {0},
+                                           gfx::AspectMode aspect = gfx::AspectMode::Fill,
+                                           float ui_scale = 1.0f) {
+    const bool             character = page == 1, invent = page == 2, options = page == 3;
     AspectRenderer         renderer(window_width, window_height);
-    std::vector<u_long128> arena(4096);
-    std::vector<u_long128> pixels(1024 * 1024 * 4 / 16);
+    gfx::SetFrameLayout({aspect, ui_scale});
+    std::vector<u_long128> arena(4096), pixels(1024 * 1024 * 4 / 16);
     mgCMemory              memory;
     memory.stSetBuffer(arena.data(), static_cast<int>(arena.size()));
     mgTexManager.SetTableBuffer(16, 4, &memory);
@@ -488,16 +483,15 @@ void ExpectMenuBackdropContinuation(int window_width, int window_height, int pag
         }
     }
     u_long128 *levels[MG_TEXTURE_LEVEL_MAX] = {pixels.data()};
-    char       name[] = "bg16";
-    char       character_name[] = "chr_bg";
-    char       invent_name[] = "inv_bg";
-    char       options_name[] = "op_bg";
+    char       name[] = "bg16", character_name[] = "chr_bg", invent_name[] = "inv_bg", options_name[] = "op_bg";
     auto      *texture = mgTexManager.EnterTexture(0, character ? character_name : invent ? invent_name
                                                                                : options  ? options_name
                                                                                           : name,
                                                    levels, 1024, 1024, 32, nullptr, 0, 0);
     ASSERT_NE(texture, nullptr);
     const auto mapping = gfx::GetLogicalMapping(gfx::kMainTarget);
+    const int  channel_tolerance =
+        aspect == gfx::AspectMode::Letterbox && ui_scale != 1.0f ? 24 : 2;
     // Horizontal entrance/return poses, including both edges away from their settled sides.
     const std::vector<int> positions = character ? std::vector<int>{-400, -256, -80, -2, 0, 128, 400} : invent ? std::vector<int>{1}
                                                                                                     : options  ? std::vector<int>{-240, 0, 240}
@@ -526,14 +520,17 @@ void ExpectMenuBackdropContinuation(int window_width, int window_height, int pag
             prim.End();
             mgEndFrame(nullptr);
             std::vector<uint8_t> rgba;
-            uint32_t             width = 0;
-            uint32_t             height = 0;
+            uint32_t             width = 0, height = 0;
             ASSERT_TRUE(mgPortCanonicalReadColor(gfx::kMainTarget, rgba, width, height));
+            const bool wide = mgPortVisibleExtent().left < 0.0f || mgPortVisibleExtent().right > mgScreenWidth;
             for (float x : {-80.0f, -40.0f, 40.0f, 470.0f, 511.0f, 513.0f, 550.0f, 590.0f}) {
                 const int   sx = static_cast<int>(mapping.offset_x + x * mapping.scale_x);
                 const float logical_x = (sx + 0.5f - mapping.offset_x) / mapping.scale_x;
-                float       u = (logical_x - left) * uv_width / dest_width;
-                const auto  offset = (static_cast<size_t>(height / 2) * width + sx) * 4;
+                if (!wide && (logical_x < 0.0f || logical_x >= 512.0f)) {
+                    continue;
+                }
+                float      u = (logical_x - left) * uv_width / dest_width;
+                const auto offset = (static_cast<size_t>(height / 2) * width + sx) * 4;
                 if (options && (240 < -8 + y_offset || 240 >= 494 + y_offset)) {
                     EXPECT_EQ(rgba[offset], 0) << "vertical slide lost its current position at x=" << x;
                     continue;
@@ -550,20 +547,36 @@ void ExpectMenuBackdropContinuation(int window_width, int window_height, int pag
                 if (u > artwork_width) {
                     u = 2 * artwork_width - u;
                 }
-                EXPECT_NEAR(rgba[offset + 1], 20 + static_cast<int>(u) / 3, 2) << "x=" << x;
-                EXPECT_GT(rgba[offset], 70) << "bare flank at x=" << x;
+                EXPECT_NEAR(rgba[offset + 1], 20 + static_cast<int>(u) / 3, channel_tolerance) << "x=" << x;
+                if (wide || (logical_x >= 0.0f && logical_x < 512.0f)) {
+                    EXPECT_GT(rgba[offset], 70) << "bare flank at x=" << x;
+                }
             }
             // Bilinear filtering at either join must not sample transparent padding.
             if (!options || (240 >= -8 + y_offset && 240 < 494 + y_offset)) {
-                for (float edge : {static_cast<float>(left), left + static_cast<float>(artwork_width) * dest_width / uv_width}) {
+                const float panel_right = left + static_cast<float>(artwork_width) * dest_width / uv_width;
+                for (float edge : {static_cast<float>(left), panel_right}) {
+                    if (!wide && (edge < 0.0f || edge > 512.0f)) {
+                        continue;
+                    }
                     const int sx = static_cast<int>(mapping.offset_x + edge * mapping.scale_x);
                     for (int dx = -2; dx <= 2; ++dx) {
                         if (sx + dx < 0 || sx + dx >= static_cast<int>(width)) {
                             continue;
                         }
+                        if (!wide) {
+                            if (edge <= left + 0.5f && dx < 0) {
+                                continue;
+                            }
+                            if (edge >= panel_right - 0.5f && dx > 0) {
+                                continue;
+                            }
+                        }
                         const float join_x = (sx + dx + 0.5f - mapping.offset_x) / mapping.scale_x;
-                        if (join_x >= 0 && join_x < 512 &&
-                            (join_x < left || join_x > left + static_cast<float>(artwork_width) * dest_width / uv_width)) {
+                        if (join_x >= 0 && join_x < 512 && (join_x < left || join_x > panel_right)) {
+                            continue;
+                        }
+                        if (!wide && (join_x < 0.0f || join_x >= 512.0f)) {
                             continue;
                         }
                         EXPECT_GT(rgba[(static_cast<size_t>(height / 2) * width + sx + dx) * 4], 70);
@@ -574,7 +587,6 @@ void ExpectMenuBackdropContinuation(int window_width, int window_height, int pag
     }
     mgTexManager.Initialize(0x1000, -1);
 }
-} // namespace
 
 TEST(MglibAspect, MenuBackdropContinuesArtworkAt1920x1080) {
     ExpectMenuBackdropContinuation(1920, 1080);
@@ -585,11 +597,11 @@ TEST(MglibAspect, MenuBackdropContinuesArtworkAt3840x2160) {
 }
 
 TEST(MglibAspect, CharacterBackdropContinuesArtworkAt1920x1080) {
-    ExpectMenuBackdropContinuation(1920, 1080, 1);
+    ExpectMenuBackdropContinuation(1920, 1080, true);
 }
 
 TEST(MglibAspect, CharacterBackdropContinuesArtworkAt3840x2160) {
-    ExpectMenuBackdropContinuation(3840, 2160, 1);
+    ExpectMenuBackdropContinuation(3840, 2160, true);
 }
 
 TEST(MglibAspect, InventBackdropContinuesArtworkAt1920x1080) {
@@ -615,10 +627,7 @@ void ExpectMenuTilesCoverWindow(int width, int height) {
     prim.write = nullptr;
     prim.Coord(1);
     for (float scroll : {-1.0f, -127.5f, -255.0f, 40.5f}) {
-        float left = 1e9f;
-        float top = 1e9f;
-        float right = -1e9f;
-        float bottom = -1e9f;
+        float left = 1e9f, top = 1e9f, right = -1e9f, bottom = -1e9f;
         mgPortSetPrimSink([&](gfx::Primitive, std::span<const gfx::Vertex2D> vertices,
                               const gfx::TextureBinding &, const gfx::DrawState &) {
             for (const auto &v : vertices) {
@@ -663,6 +672,14 @@ TEST(MglibAspect, OptionsAndHelpBackdropContinueArtworkAt3840x2160) {
 
 TEST(MglibAspect, OptionsAndHelpFlanksFollowVerticalSlide) {
     ExpectMenuBackdropContinuation(1920, 1080, 3, {-480, -240, 80, 240, 480});
+}
+
+TEST(MglibAspect, OptionsBackdropLetterboxHasNoEdgeHairlineAt1920x1080) {
+    ExpectMenuBackdropContinuation(1920, 1080, 3, {0}, gfx::AspectMode::Letterbox);
+}
+
+TEST(MglibAspect, OptionsBackdropLetterboxStaysOpaqueWithUiScale) {
+    ExpectMenuBackdropContinuation(1920, 1080, 3, {0}, gfx::AspectMode::Letterbox, 1.25f);
 }
 
 namespace {
@@ -733,9 +750,8 @@ CellVertices FloorMapCellVertices(float x, float y) {
 // Retail draws a room up to 20 units and a passage up to 0 units past the screen's right edge, and
 // 30 and 20 units past its bottom. Each must hold at the given edges.
 void ExpectFloorMapCullsAt(float right, float bottom) {
-    const mgPortExtent extent = mgPortVisibleUiExtent(gfx::kMainTarget);
-    EXPECT_NEAR(extent.right, right, 0.5f);
-    EXPECT_NEAR(extent.bottom, bottom, 0.5f);
+    EXPECT_NEAR(PortDngMapVisibleRight(), right, 0.5f);
+    EXPECT_NEAR(PortDngMapVisibleBottom(), bottom, 0.5f);
     EXPECT_GT(FloorMapCellVertices(right + 19.0f, 200.0f).room, 0u);
     EXPECT_EQ(FloorMapCellVertices(right + 21.0f, 200.0f).room, 0u);
     EXPECT_GT(FloorMapCellVertices(right - 1.0f, 200.0f).root, 0u);
@@ -765,9 +781,9 @@ TEST(MglibAspect, FloorMapDrawsCellsBelowANarrowScreen) {
 // UI scale 0.5 halves the floor map's 2D about the centre, so twice its extent is on screen.
 TEST(MglibAspect, FloorMapDrawsCellsUncoveredByUiScale) {
     AspectRenderer renderer(1024, 768);
-    gfx::SetFrameLayout({.aspect = gfx::AspectMode::Fill, .ui_scale = 0.5f});
+    gfx::SetFrameLayout({gfx::AspectMode::Fill, 0.5f});
     ExpectFloorMapCullsAt(256.0f + 512.0f, 240.0f + 480.0f);
-    gfx::SetFrameLayout({.aspect = gfx::AspectMode::Fill, .ui_scale = 1.0f});
+    gfx::SetFrameLayout({gfx::AspectMode::Fill, 1.0f});
 }
 
 namespace {
@@ -795,9 +811,7 @@ int SplitStrokes(const std::vector<uint8_t> &rgba, uint32_t width, uint32_t heig
     int                       found = 0;
     const auto                scan = [&](uint32_t lines, uint32_t length, float unit, auto at) {
         for (uint32_t line = 0; line < lines; ++line) {
-            int previous_start = -1;
-            int previous_end = -1;
-            int start = -1;
+            int previous_start = -1, previous_end = -1, start = -1;
             for (uint32_t i = 0; i <= length; ++i) {
                 const bool on = i < length && at(line, i);
                 if (on && start < 0) {
@@ -820,7 +834,7 @@ int SplitStrokes(const std::vector<uint8_t> &rgba, uint32_t width, uint32_t heig
     return found;
 }
 
-void ExpectSolidPassages() {
+void ExpectSolidPassages(const char *dump) {
     uint32_t width = 0;
     uint32_t height = 0;
     // The detector sees retail's three 1-pixel lines, drawn without bands, as split.
@@ -850,6 +864,10 @@ void ExpectSolidPassages() {
                 map->DrawRoot(mgRect<float>(230.0f, 200.0f, 52.0f, 20.0f), &root, 0, 0, 128);
             },
             width, height);
+        if (dump) {
+            const std::filesystem::path png = std::filesystem::path(dump) / ("passage-" + std::to_string(shape) + ".png");
+            EXPECT_TRUE(gfx::WritePng(png, rgba.data(), width, height));
+        }
         std::size_t count = 0;
         for (std::size_t i = 0; i < rgba.size(); i += 4) {
             count += rgba[i] > 64;
@@ -879,13 +897,13 @@ void ExpectSolidPassages() {
 }
 } // namespace
 
-// Every passage shape is one solid stroke above 512x480.
+// Every passage shape is one solid stroke above 512x480. DC2_FLOOR_MAP_PASSAGE_PNG_DIR saves each.
 TEST(MglibAspect, FloorMapPassagesAreSolidAt1920x1080) {
     AspectRenderer renderer(1920, 1080);
-    ExpectSolidPassages();
+    ExpectSolidPassages(std::getenv("DC2_FLOOR_MAP_PASSAGE_PNG_DIR"));
 }
 
 TEST(MglibAspect, FloorMapPassagesAreSolidAt3840x2160) {
     AspectRenderer renderer(3840, 2160);
-    ExpectSolidPassages();
+    ExpectSolidPassages(nullptr);
 }

@@ -26,11 +26,11 @@ int CardHit(Point p, Point list, float clip_top, int visible_rows, int count) {
 }
 
 MakeListsResult MakeListsUpdate(const MakeLists &lists, Point p, bool moved, std::uint32_t clicked, float wheel) {
-    MakeListsResult result{.state = lists};
+    MakeListsResult result{lists};
     auto           &next = result.state;
     // The pane drawn in front owns the pointer where the card list and the item board overlap,
     // even over a row it does not accept, such as one still sliding out of the eased board.
-    const Rect card_rows{.x = lists.card_list.x, .y = lists.card_clip, .w = kCardWidth, .h = kCardRows * kCardPitch};
+    const Rect card_rows{lists.card_list.x, lists.card_clip, kCardWidth, kCardRows * kCardPitch};
     bool       on_cards = lists.cards && card_rows.Contains(p);
     bool       on_board = lists.board && lists.board_clip.Contains(p);
     if (on_cards && on_board && lists.items_front) {
@@ -94,17 +94,17 @@ MakeListsResult MakeListsUpdate(const MakeLists &lists, Point p, bool moved, std
     return result;
 }
 
-MakeBoard MakeBoardRects(Point pos, std::span<const float, 5> info) noexcept {
+MakeBoard MakeBoardRects(Point pos, const float *info) {
     // These follow CommonBoardDraw's own placement of the buttons and the count.
     const float width = info[4];
-    const auto  arrow_x = static_cast<float>(static_cast<int>(10 + pos.x + width / 2 + width / 10 + 2));
-    const auto  arrow_y = static_cast<float>(static_cast<int>(250 + pos.y));
+    const float arrow_x = static_cast<int>(10 + pos.x + width / 2 + width / 10 + 2);
+    const float arrow_y = static_cast<int>(250 + pos.y);
     return {
-        .make = {.x = info[0],           .y = info[1], .w = 60, .h = 26},
-        .quit = {.x = info[2],           .y = info[3], .w = 60, .h = 26},
-        .fewer = {.x = arrow_x,           .y = arrow_y, .w = 16, .h = 22},
-        .count = {.x = arrow_x + 16,      .y = arrow_y, .w = 32, .h = 22},
-        .more = {.x = arrow_x + 16 + 34, .y = arrow_y, .w = 16, .h = 22},
+        {info[0],           info[1], 60, 26},
+        {info[2],           info[3], 60, 26},
+        {arrow_x,           arrow_y, 16, 22},
+        {arrow_x + 16,      arrow_y, 32, 22},
+        {arrow_x + 16 + 34, arrow_y, 16, 22},
     };
 }
 
@@ -112,11 +112,8 @@ MakeInput MakeBoardInput(const MakeBoard &board, Point p, bool moved, std::uint3
     const bool on_number = board.fewer.Contains(p) || board.count.Contains(p) || board.more.Contains(p);
     MakeInput  input;
     if (moved || (clicked & 1)) {
-        if (board.make.Contains(p) || on_number) {
-            input.row = 0;
-        } else if (board.quit.Contains(p)) {
-            input.row = 1;
-        }
+        input.row = board.make.Contains(p) || on_number ? 0 : board.quit.Contains(p) ? 1
+                                                                                     : -1;
     }
     input.buttons = clicked & 2 ? PAD_CIRCLE : 0;
     if (std::isfinite(wheel) && wheel != 0) {
@@ -146,7 +143,7 @@ void MakeBoardMouse(CMenuInvent &menu, const MenuMouseSample &mouse) {
         return;
     }
     const MakeBoard board = MakeBoardRects(FormPoint(menu.makebrd_form), MakeBoardDrawInfo);
-    const MakeInput input = MakeBoardInput(board, {.x = mouse.x, .y = mouse.y}, mouse.moved, mouse.clicked, mouse.wheel);
+    const MakeInput input = MakeBoardInput(board, {mouse.x, mouse.y}, mouse.moved, mouse.clicked, mouse.wheel);
     if (input.row >= 0 && input.row != menu.make_cursor) {
         menu.make_cursor = input.row;
         MenuSePlay(SYSTEM_SE_CURSOR);
@@ -167,18 +164,18 @@ void ListsMouse(CMenuInvent &menu, CMenuKeyFunc &keys, const MenuMouseSample &mo
     lists.cards = title && title->draw_flag && list && keys.have_item.item_no <= 0;
     if (lists.cards) {
         lists.card_count = menu.EnableSelectMaxCardList();
-        lists.card_list = {.x = list->x, .y = list->y};
+        lists.card_list = {list->x, list->y};
         lists.card_clip = FormPoint(title, "basecard").y;
     }
     auto *board = menu.itembrd_form;
     lists.board = board && board->draw_flag;
     if (lists.board) {
         lists.item_count = GetNowBagMax(ITEM_BOARD_MAIN);
-        lists.board_origin = {.x = MenuItemBrdUnderBrdPosXY[0], .y = MenuItemBrdUnderBrdPosXY[1]};
+        lists.board_origin = {MenuItemBrdUnderBrdPosXY[0], MenuItemBrdUnderBrdPosXY[1]};
         lists.board_clip = ItemBoardClip(board);
         lists.board_rest = ItemBoardRest(board);
     }
-    const auto  result = MakeListsUpdate(lists, {.x = mouse.x, .y = mouse.y}, mouse.moved, mouse.clicked, mouse.wheel);
+    const auto  result = MakeListsUpdate(lists, {mouse.x, mouse.y}, mouse.moved, mouse.clicked, mouse.wheel);
     const auto &next = result.state;
     const int   pane = next.items_front ? INVENT_MODE_ITEM_LIST : INVENT_MODE_CARD_LIST;
     if (pane != menu.key_arg_no) {

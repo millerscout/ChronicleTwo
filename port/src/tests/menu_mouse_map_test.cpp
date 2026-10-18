@@ -4,15 +4,14 @@
 #include <array>
 #include <cstddef>
 #include <string>
-#include <utility>
 
 #include "dngfloor.hpp"
 #include "dngmenu.hpp"
-#include "dngmenu_port.hpp"
 #include "gamepad.hpp"
 #include "mainloop.hpp"
 #include "menu_mouse_floor.hpp"
 #include "menu_mouse_map.hpp"
+#include "menu_mouse_retail.hpp"
 #include "menuaqua.hpp"
 #include "menucls1.hpp"
 #include "menumain.hpp"
@@ -25,8 +24,6 @@
 #include "platform/clock.hpp"
 #include "platform/input.hpp"
 #include "save_slots.hpp"
-#include "stubs/dngmenu.hpp"
-#include "stubs/menumap.hpp"
 
 namespace {
 // Retail constructs these menus in their own units; the adapters read only plain fields.
@@ -62,9 +59,9 @@ void HelpLines(ClsMes &message, int left_x, int left_y, int right_x, int right_y
     message.page_top = 0;
     message.reveal_num = 5;
     message.draw_off_x = message.draw_off_y = 0;
-    message.tbl[0] = {.code = static_cast<u16>(MES_CODE_GAIJI + left_symbol), .x = 0, .y = 0};
+    message.tbl[0] = {.code = u16(MES_CODE_GAIJI + left_symbol), .x = 0, .y = 0};
     message.tbl[1] = {.code = 'M', .x = 22, .y = 0};
-    message.tbl[2] = {.code = static_cast<u16>(MES_CODE_GAIJI + right_symbol), .x = 0, .y = 24};
+    message.tbl[2] = {.code = u16(MES_CODE_GAIJI + right_symbol), .x = 0, .y = 24};
     message.tbl[3] = {.code = 'C', .x = 60, .y = 24};
     message.tbl[4] = {.code = 'n', .x = 0, .y = 48};
     for (int line = 0; line < 3; ++line) {
@@ -83,7 +80,7 @@ TEST(MenuMouseMap, WorldMapMarksCoverOnlyUnlockedAreasAndKeepTheirNeighboursApar
     areas[1] = {.x = 305, .y = 149, .enable = true};
     areas[2] = {.x = 370, .y = 184, .enable = true};
     areas[3] = {.x = 200, .y = 300, .enable = false};
-    const MenuMouseRect name{.x = 309, .y = 128, .w = 180, .h = 46};
+    const MenuMouseRect name{309, 128, 180, 46};
     const auto          rows = MenuMouseWorldMapRows(areas, name);
     ASSERT_EQ(rows.size(), 5u);
     EXPECT_EQ(rows[0].w, 0);
@@ -101,32 +98,30 @@ TEST(MenuMouseMap, WorldMapMarksCoverOnlyUnlockedAreasAndKeepTheirNeighboursApar
 }
 
 TEST(MenuMouseMap, FloorRectsFollowTheDrawnRoomPictureAndItsCull) {
-    auto room = Room(0, 0, 1, 0).room;
-    room.offset_x = 7;
-    room.offset_y = -3;
-    // A culled room reads as an empty picture at the origin.
-    const auto put = [&room](int dng_no) { return PortDngRoomPicture(dng_no, room, 100, 200, 512, 480).value_or(mgRect<float>()); };
-    auto       picture = put(0);
-    EXPECT_FLOAT_EQ(picture.left, 70);
-    EXPECT_FLOAT_EQ(picture.top, 158);
-    EXPECT_FLOAT_EQ(picture.right, 96);
-    EXPECT_FLOAT_EQ(picture.bottom, 66);
-    picture = put(5);
-    EXPECT_FLOAT_EQ(picture.right, 100);
-    EXPECT_FLOAT_EQ(picture.bottom, 68);
-    room.visited = 1;
-    picture = put(0);
-    EXPECT_FLOAT_EQ(picture.left, 77);
-    EXPECT_FLOAT_EQ(picture.top, 155);
-    room.flag = DNGMAP_ROOM_FLAG_ROOM | DNGMAP_ROOM_FLAG_SUB;
-    picture = put(0);
-    EXPECT_FLOAT_EQ(picture.right, 96);
-    EXPECT_FLOAT_EQ(picture.bottom, 96);
+    auto room = Room(0, 0, 1, 0);
+    room.room.offset_x = 7;
+    room.room.offset_y = -3;
+    auto rect = MenuMouseFloorRect(room, 100, 200, 0, 512, 480);
+    EXPECT_FLOAT_EQ(rect.x, 70);
+    EXPECT_FLOAT_EQ(rect.y, 158);
+    EXPECT_FLOAT_EQ(rect.w, 96);
+    EXPECT_FLOAT_EQ(rect.h, 66);
+    rect = MenuMouseFloorRect(room, 100, 200, 5, 512, 480);
+    EXPECT_FLOAT_EQ(rect.w, 100);
+    EXPECT_FLOAT_EQ(rect.h, 68);
+    room.room.visited = 1;
+    rect = MenuMouseFloorRect(room, 100, 200, 0, 512, 480);
+    EXPECT_FLOAT_EQ(rect.x, 77);
+    EXPECT_FLOAT_EQ(rect.y, 155);
+    room.room.flag = DNGMAP_ROOM_FLAG_ROOM | DNGMAP_ROOM_FLAG_SUB;
+    rect = MenuMouseFloorRect(room, 100, 200, 0, 512, 480);
+    EXPECT_FLOAT_EQ(rect.w, 96);
+    EXPECT_FLOAT_EQ(rect.h, 96);
     // DrawRoomOne skips a room whose put position is past the right edge plus 20 or the bottom plus 30.
-    EXPECT_TRUE(PortDngRoomPicture(0, room, 532, 200, 512, 480));
-    EXPECT_FALSE(PortDngRoomPicture(0, room, 533, 200, 512, 480));
-    EXPECT_FALSE(PortDngRoomPicture(0, room, 100, 511, 512, 480));
-    EXPECT_TRUE(PortDngRoomPicture(0, room, 600, 200, 597, 480));
+    EXPECT_GT(MenuMouseFloorRect(room, 532, 200, 0, 512, 480).w, 0);
+    EXPECT_EQ(MenuMouseFloorRect(room, 533, 200, 0, 512, 480).w, 0);
+    EXPECT_EQ(MenuMouseFloorRect(room, 100, 511, 0, 512, 480).w, 0);
+    EXPECT_GT(MenuMouseFloorRect(room, 600, 200, 0, 597, 480).w, 0);
 }
 
 // Rainbow Butterfly Wood forks at floor 8: floors 9-12 go down to a side floor, 13-15 right to the boss.
@@ -205,16 +200,6 @@ protected:
     CMenuKeyFunc *keys = MenuCommonInfo;
     CMenuKeyFunc  menu;
     CDC2Mes      *messages[9]{};
-    // Retail menu statics the adapters read, restored after each test.
-    CWorldMapMenu  *world_map = WorldMapPtr;
-    signed char     world_map_type = WorldMapMenuType;
-    WMAP_AREA_DATA *areas = spi_wmaparea_tbl;
-    short           area_count = spi_wmaparea_tblnum;
-    CDngFreeMap    *dng_map = MenuDngMap;
-    CMenuTreeMap   *tree = CMenuTreePt;
-    short           tree_mode = DngTreeMode;
-    u8              info_view = dngfloor_infoview;
-    s8              ask = DngAskMessageDrawFlag;
 
     void SetUp() override {
         mgScreenWidth = 512;
@@ -229,8 +214,8 @@ protected:
         ClockSetUnbounded(true);
         menu.open_type = MENU_OPEN_MAIN_TOWN;
         MenuCommonInfo = &menu;
-        std::ranges::copy(MenuDCMsg, messages);
-        std::ranges::fill(MenuDCMsg, nullptr);
+        std::copy(std::begin(MenuDCMsg), std::end(MenuDCMsg), messages);
+        std::fill(std::begin(MenuDCMsg), std::end(MenuDCMsg), nullptr);
     }
 
     void TearDown() override {
@@ -242,16 +227,15 @@ protected:
         mgScreenHeight = height;
         LanguageCode = language;
         MenuCommonInfo = keys;
-        std::ranges::copy(messages, MenuDCMsg);
-        WorldMapPtr = world_map;
-        WorldMapMenuType = world_map_type;
-        spi_wmaparea_tbl = areas;
-        spi_wmaparea_tblnum = area_count;
-        MenuDngMap = dng_map;
-        CMenuTreePt = tree;
-        DngTreeMode = tree_mode;
-        dngfloor_infoview = info_view;
-        DngAskMessageDrawFlag = ask;
+        std::copy(std::begin(messages), std::end(messages), MenuDCMsg);
+        MouseWorldMap = nullptr;
+        MouseWorldAreas = nullptr;
+        MouseWorldAreaCount = 0;
+        MouseWorldMapType = WORLD_MAP_MENU_WORLD;
+        MouseDngMap = nullptr;
+        MouseTree = nullptr;
+        MouseFloorInfoView = false;
+        MouseFloorAsk = DNG_TREE_MAP_ASK_NONE;
         InputResetBindings();
     }
 
@@ -260,9 +244,7 @@ protected:
     // Moves the pointer, which starts at (256, 240), by logical units this tick.
     static void Move(float dx, float dy) { InputSetScriptedDevices({.mouse_dx = dx, .mouse_dy = dy}); }
 
-    static void Click(int buttons = 1) {
-        InputSetScriptedDevices({.mouse_buttons = static_cast<std::uint32_t>(buttons)});
-    }
+    static void Click(int buttons = 1) { InputSetScriptedDevices({.mouse_buttons = std::uint32_t(buttons)}); }
 
     static void Release() {
         InputSetScriptedDevices({});
@@ -276,8 +258,8 @@ protected:
     static int ClickQuestion(Adapter adapter, int buttons) {
         static const char       owner = 0;
         constexpr MenuMouseRect choices[] = {
-            {.x = 240, .y = 230, .w = 40, .h = 30},
-            {.x = 300, .y = 230, .w = 40, .h = 30}
+            {240, 230, 40, 30},
+            {300, 230, 40, 30}
         };
         for (int tick = 0; tick < 8; ++tick) {
             MenuMouseNoteChoices(&owner, 7, choices, 0, true);
@@ -286,7 +268,7 @@ protected:
             Tick();
         }
         MenuMouseNoteChoices(&owner, 7, choices, 0, true);
-        InputSetScriptedDevices({.mouse_buttons = static_cast<std::uint32_t>(buttons), .mouse_dx = 1});
+        InputSetScriptedDevices({.mouse_buttons = std::uint32_t(buttons), .mouse_dx = 1});
         adapter();
         const int action = MenuCheckPushButton();
         Tick();
@@ -311,10 +293,10 @@ struct WorldMap {
         map->cursor_tex = &cursor;
         map->cursor_view = true;
         map->area_no = 1;
-        WorldMapPtr = map.get();
-        WorldMapMenuType = WORLD_MAP_MENU_WORLD;
-        spi_wmaparea_tbl = areas;
-        spi_wmaparea_tblnum = 4;
+        MouseWorldMap = map.get();
+        MouseWorldMapType = WORLD_MAP_MENU_WORLD;
+        MouseWorldAreas = areas;
+        MouseWorldAreaCount = 4;
     }
 };
 
@@ -405,7 +387,7 @@ struct FloorMap {
 
     FloorMap() {
         manager->glid_info = cells.data();
-        manager->glid_num = static_cast<int>(cells.size());
+        manager->glid_num = int(cells.size());
         board->floor_manager = manager.get();
         // Floor 8 (column 8, row 0) puts at (186, 120) and floor 13 (column 9) at (238, 120).
         board->pos_x = -230;
@@ -414,10 +396,10 @@ struct FloorMap {
         tree->key_arg_no = DNG_TREE_MAP_SCREEN_MAP;
         tree->select_glid = At(8);
         tree->help_view = true;
-        MenuDngMap = board.get();
-        CMenuTreePt = tree.get();
-        DngTreeMode = DNG_TREE_MODE_MAP;
-        WorldMapMenuType = WORLD_MAP_MENU_TREE_MAP;
+        MouseDngMap = board.get();
+        MouseTree = tree.get();
+        MouseTreeMode = DNG_TREE_MODE_MAP;
+        MouseWorldMapType = WORLD_MAP_MENU_TREE_MAP;
     }
 };
 
@@ -488,8 +470,8 @@ TEST_P(MenuMouseMapInput, FloorMapHelpLabelsPressSquareAndTriangle) {
 TEST_P(MenuMouseMapInput, FloorInformationActsOnlyOnItsLabels) {
     FloorMap floor;
     floor.tree->key_arg_no = DNG_TREE_MAP_SCREEN_FLOOR;
-    dngfloor_infoview = true;
-    DngAskMessageDrawFlag = DNG_TREE_MAP_ASK_JUMP;
+    MouseFloorInfoView = true;
+    MouseFloorAsk = DNG_TREE_MAP_ASK_JUMP;
     CDC2Mes message;
     // Cancel is drawn under the pointer's start at (256, 240); Move is at the bottom left.
     HelpLines(message, 70, 430, 240, 236);
@@ -538,12 +520,12 @@ TEST_P(MenuMouseMapInput, FloorQuestionsAndOtherFloorScreensUseTheLanguageLayout
     MenuMouseEnable(true);
     // The start, side, boss and exit rooms ask Yes/No without the information panel.
     floor.tree->key_arg_no = DNG_TREE_MAP_SCREEN_FLOOR;
-    dngfloor_infoview = false;
-    DngAskMessageDrawFlag = DNG_TREE_MAP_ASK_JUMP;
+    MouseFloorInfoView = false;
+    MouseFloorAsk = DNG_TREE_MAP_ASK_JUMP;
     EXPECT_EQ(ClickQuestion(MenuMouseFloor, 1), MENU_PUSH_BUTTON_DECIDE);
     EXPECT_EQ(ClickQuestion(MenuMouseFloor, 2), MENU_PUSH_BUTTON_CANCEL);
     // The dungeon menu's information-only view and the materials list cancel with Mouse2.
-    DngAskMessageDrawFlag = DNG_TREE_MAP_ASK_INFO;
+    MouseFloorAsk = DNG_TREE_MAP_ASK_INFO;
     Release();
     Click(2);
     MenuMouseFloor();
@@ -560,7 +542,7 @@ TEST_P(MenuMouseMapInput, FloorQuestionsAndOtherFloorScreensUseTheLanguageLayout
 struct FloorSave {
     decltype(SaveSlots) catalog = SaveSlots;
     CSaveMenuClass   save;
-    CMenuPosDataForm form{};
+    CMenuPosDataForm form;
 
     explicit FloorSave(CMenuKeyFunc &menu) {
         SaveSlots.saves.resize(20);
@@ -574,12 +556,12 @@ struct FloorSave {
         save.select = 11;
         save.top = 10;
         menu.now_mode = MENU_MODE_DNG_TREE_MAP;
-        DngTreeMode = DNG_TREE_MODE_SAVE;
+        MouseTreeMode = DNG_TREE_MODE_SAVE;
     }
 
     ~FloorSave() {
-        SaveSlots = std::move(catalog);
-        DngTreeMode = DNG_TREE_MODE_MAP;
+        SaveSlots = catalog;
+        MouseTreeMode = DNG_TREE_MODE_MAP;
     }
 };
 

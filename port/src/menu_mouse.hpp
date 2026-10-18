@@ -7,8 +7,8 @@
 #include "gfx/gfx.hpp"
 
 struct MenuMouseRect {
-    float              x, y, w, h;
-    [[nodiscard]] bool Contains(float px, float py) const;
+    float x, y, w, h;
+    bool  Contains(float px, float py) const;
 };
 
 struct MenuMouseSample {
@@ -70,7 +70,8 @@ gfx::InterpKey MenuMouseNoteHand(const gfx::TextureBinding &texture, gfx::Logica
 void MenuMouseSetButtons(int buttons);
 // Like MenuMouseSetButtons, for a screen drawn over choice windows: it also drops the target and
 // confirmation this tick's sample gave them, so nothing acts on them once the screen closes.
-void MenuMouseClaimButtons(int mask);
+void MenuMouseClaimButtons(int buttons);
+bool MenuMouseActive();
 
 class CSaveMenuClass;
 void MenuMouseSave(CSaveMenuClass &save);
@@ -79,8 +80,9 @@ gfx::InterpKey MenuMouseNextHandKey();
 gfx::InterpKey MenuMouseReplacedHandKey();
 class CMenuOption;
 class CMenuPosDataForm;
-// Retail Options targets are drawn buttons inside the list's clip form (clip0), when given.
-bool MenuMouseOption(CMenuOption &menu, CMenuPosDataForm *form, const CMenuPosDataForm *clip = nullptr);
+// Retail Options targets are drawn rows and buttons inside the list's clip form (clip0).
+bool MenuMouseOption(CMenuOption &menu, CMenuPosDataForm *form);
+bool MenuMouseOption(CMenuOption &menu, CMenuPosDataForm *form, const CMenuPosDataForm *clip);
 // Hover moves the retail Options cursor to a row or button; the wheel scrolls its rows.
 void MenuMouseOptionHover(CMenuOption &menu, CMenuPosDataForm *form, const CMenuPosDataForm *clip);
 // Character page portraits: hover selects, a click on a portrait confirms.

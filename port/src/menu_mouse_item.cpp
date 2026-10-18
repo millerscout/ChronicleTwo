@@ -1,5 +1,7 @@
 #include "menu_mouse_item.hpp"
 
+#include <SDL3/SDL.h>
+
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -7,7 +9,6 @@
 #include "gamepad.hpp"
 #include "gfx/gfx.hpp"
 #include "mainloop.hpp"
-#include "menu_world.hpp"
 #include "menuaqua.hpp"
 #include "menuchr.hpp"
 #include "menucls1.hpp"
@@ -17,8 +18,9 @@
 #include "menusys.hpp"
 #include "mglib.hpp"
 #include "mglib_port.hpp"
+#include "platform/input.hpp"
+#include "platform/window.hpp"
 #include "snd_mngr.hpp"
-#include "userdata.hpp"
 
 namespace menumouse {
 bool Rect::Contains(Point p) const {
@@ -32,7 +34,7 @@ Target GridHit(Point p, Point origin, Rect clip, int count) {
     const int column = static_cast<int>((p.x - origin.x) / 40);
     const int row = static_cast<int>((p.y - origin.y) / 50);
     const int index = row * 6 + column;
-    return index < count ? Target{.panel = ITEM_MENU_PANEL_BAG, .cursor = index} : Target{};
+    return index < count ? Target{ITEM_MENU_PANEL_BAG, index} : Target{};
 }
 
 int ScrollTop(int top, int count, int visible_rows, float wheel) {
@@ -55,26 +57,18 @@ Point FormPoint(CMenuPosDataForm *form, const char *part) {
 
 Rect ItemBoardClip(CMenuPosDataForm *board) {
     const Point p = FormPoint(board);
-    return {.x = p.x + 16, .y = p.y + 20, .w = 240, .h = 250};
+    return {p.x + 16, p.y + 20, 240, 250};
 }
 
-Point ItemBoardRest(CMenuPosDataForm *board) { return {.x = MenuItemBrdUnderBrdPosXY[0], .y = FormPoint(board).y + 26}; }
+Point ItemBoardRest(CMenuPosDataForm *board) { return {MenuItemBrdUnderBrdPosXY[0], FormPoint(board).y + 26}; }
 
 Target WheelTarget(Point p, Point rest, Rect clip, int top, int count, int cursor) {
     // The aperture reaches above the first resting row; only a cell of the new visible rows may be chosen.
-    const Target target = GridHit(p, {.x = rest.x, .y = rest.y - top * 50.0f}, clip, count);
+    const Target target = GridHit(p, {rest.x, rest.y - top * 50.0f}, clip, count);
     if (target && VisibleRow(target.cursor, top, 5)) {
         return target;
     }
-    return {.panel = ITEM_MENU_PANEL_BAG, .cursor = std::clamp(cursor, top * 6, std::min(count - 1, (top + 5) * 6 - 1))};
-}
-
-int BagHit(Point p, CMenuPosDataForm *board, int count) {
-    if (!board || !board->draw_flag) {
-        return -1;
-    }
-    const auto hit = GridHit(p, {.x = MenuItemBrdUnderBrdPosXY[0], .y = MenuItemBrdUnderBrdPosXY[1]}, ItemBoardClip(board), count);
-    return hit ? hit.cursor : -1;
+    return {ITEM_MENU_PANEL_BAG, std::clamp(cursor, top * 6, std::min(count - 1, (top + 5) * 6 - 1))};
 }
 
 void Gesture::Reset() { *this = {}; }
@@ -105,8 +99,7 @@ Action Gesture::Update(const Take &take, Point p, Target hit, bool can_pick_up, 
         }
     }
     if (pending) {
-        const float dx = p.x - origin.x;
-        const float dy = p.y - origin.y;
+        const float dx = p.x - origin.x, dy = p.y - origin.y;
         if (dx * dx + dy * dy >= 16) {
             pending = false;
             dragging = true;
@@ -147,47 +140,16 @@ bool PadActive() {
     return GamePad__2.pad[0].button != 0;
 }
 
+bool Unfocused() {
+    WindowMode mode;
+    // WindowCurrentMode is false for headless replays and tests without a window.
+    return WindowCurrentMode(mode) && !(SDL_GetWindowFlags(WindowHandle()) & SDL_WINDOW_INPUT_FOCUS);
+}
+
 Rect BoardClip(CMenuItemInfo &menu) { return ItemBoardClip(menu.item_board_form); }
 
-// The 3D models are placed in world space rather than by a form part. A model
-// target spans from its page's retail cursor part down to the page's lower parts.
-// 180 units is the character model's width (see Hit). From the left panel's
-// parts it ends at x 188 to 208 in every layout, short of the bag at x 242.
-Rect ModelArea(float left, float top, float bottom) { return {.x = left, .y = top, .w = 180, .h = bottom - top}; }
-
-// The ridepod and monster pages: the model stands right of chr_cur, above the name.
-Target PartnerHit(CMenuItemInfo &menu, Point p) {
-    const bool robo = menu.view_mode == MENU_ITEM_VIEW_ROBO;
-    auto      *form = menu.view_form[robo ? 3 : 4];
-    if (!form || !form->draw_flag || !form->GetPartInfo(const_cast<char *>("chr_cur"))) {
-        return {};
-    }
-    // The left edge is the Ridepod's first part slot (c_w0, 16 left of the form).
-    // The top is 64 above chr_cur, where the rider's head reaches. The bottom is
-    // the name row's top (name, 14 to 16 above the form), above the part slots.
-    const Point cursor = FormPoint(form, "chr_cur");
-    const Point origin = FormPoint(form);
-    if (ModelArea(origin.x - 16, cursor.y - 64, origin.y - 16).Contains(p)) {
-        return {.panel = robo ? ITEM_MENU_PANEL_RIDEPOD : ITEM_MENU_PANEL_MONSTER, .cursor = 0};
-    }
-    return {};
-}
-
-// Max's bait slot is drawn, and reachable by the retail cursor, only with a rod equipped.
-Target BaitHit(CMenuItemInfo &menu, CMenuPosDataForm *form, Point p) {
-    auto *bait = form->GetPartInfo(const_cast<char *>("esa0"));
-    auto *user = GetUserDataMan();
-    if (menu.view_mode != MENU_ITEM_VIEW_MAX || menu.sub_view != 0 || !bait || !bait->draw_flag || !user || !user->GetActiveEsa()) {
-        return {};
-    }
-    // The bait icon is drawn at its part's size (24x30), smaller than the 28x35
-    // item icons. Include the same 4-unit margin around it.
-    const Point q = FormPoint(form, "esa0");
-    return Rect{.x = q.x - 4, .y = q.y - 4, .w = bait->w + 8, .h = bait->h + 8}.Contains(p) ? Target{.panel = ITEM_MENU_PANEL_FISHING_BAIT, .cursor = 0} : Target{};
-}
-
 Target Hit(CMenuItemInfo &menu, Point p, int count) {
-    Target target = GridHit(p, {.x = MenuItemBrdUnderBrdPosXY[0], .y = MenuItemBrdUnderBrdPosXY[1]}, BoardClip(menu), count);
+    Target target = GridHit(p, {MenuItemBrdUnderBrdPosXY[0], MenuItemBrdUnderBrdPosXY[1]}, BoardClip(menu), count);
     if (target) {
         return target;
     }
@@ -204,34 +166,21 @@ Target Hit(CMenuItemInfo &menu, Point p, int count) {
             if (!part || !part->draw_flag) {
                 continue;
             }
-            constexpr const char *values[] = {"st0", "st1", "el0", "el1", "el2", "el3", "el4", "el5", "el6", "el7"};
-            const Point           q = FormPoint(form, part->name);
-            float                 width = part->w > 0 ? part->w : 60;
-            if (auto *value = form->GetPartInfo(const_cast<char *>(values[i]))) {
+            const Point  q = FormPoint(form, part->name);
+            static char *values[] = {const_cast<char *>("st0"), const_cast<char *>("st1"),
+                                     const_cast<char *>("el0"), const_cast<char *>("el1"), const_cast<char *>("el2"), const_cast<char *>("el3"),
+                                     const_cast<char *>("el4"), const_cast<char *>("el5"), const_cast<char *>("el6"), const_cast<char *>("el7")};
+            float        width = part->w > 0 ? part->w : 60;
+            if (auto *value = form->GetPartInfo(values[i])) {
                 const Point v = FormPoint(form, value->name);
                 width = std::max(width, v.x + value->w - q.x);
             }
             // Include the label, value and their shared board's small padding.
-            if (Rect{.x = q.x - 2, .y = q.y - 2, .w = width + 4, .h = (part->h > 0 ? part->h : 18) + 4}.Contains(p)) {
-                return {.panel = panel, .cursor = i};
-            }
-        }
-        // The model turns above the parameter board, right of the retail hand at
-        // chrpos. The top is 112 above chrpos: the bag's first row on the weapon
-        // page. The bottom stops 20 above the board, at the durability bar (hpbar).
-        if (form->GetPartInfo(const_cast<char *>("chrpos"))) {
-            const Point cursor = FormPoint(form, "chrpos");
-            const Point board = FormPoint(form);
-            if (ModelArea(cursor.x - 8, cursor.y - 112, board.y - 20).Contains(p)) {
-                return {.panel = menu.view_mode == MENU_ITEM_VIEW_WEAPON ? ITEM_MENU_PANEL_WEAPON : ITEM_MENU_PANEL_FISHING_ROD, .cursor = 0};
+            if (Rect{q.x - 2, q.y - 2, width + 4, (part->h > 0 ? part->h : 18) + 4}.Contains(p)) {
+                return {panel, i};
             }
         }
         return {};
-    }
-    if (menu.view_mode == MENU_ITEM_VIEW_ROBO || menu.view_mode == MENU_ITEM_VIEW_MONSTER) {
-        if (const Target target = PartnerHit(menu, p)) {
-            return target;
-        }
     }
     if (menu.view_mode == MENU_ITEM_VIEW_ROBO) {
         auto *form = menu.view_form[3];
@@ -241,8 +190,8 @@ Target Hit(CMenuItemInfo &menu, Point p, int count) {
         for (int i = 0; i < 2; ++i) {
             const std::string name = "c_w" + std::to_string(i);
             const Point       q = FormPoint(form, name.c_str());
-            if (Rect{.x = q.x, .y = q.y, .w = 80, .h = 40}.Contains(p)) {
-                return {.panel = ITEM_MENU_PANEL_RIDEPOD_PARTS, .cursor = i};
+            if (Rect{q.x, q.y, 80, 40}.Contains(p)) {
+                return {ITEM_MENU_PANEL_RIDEPOD_PARTS, i};
             }
         }
         return {};
@@ -262,8 +211,8 @@ Target Hit(CMenuItemInfo &menu, Point p, int count) {
             continue;
         }
         Point q = FormPoint(form, icon->name);
-        if (Rect{.x = q.x - 4, .y = q.y - 4, .w = 40, .h = 40}.Contains(p)) {
-            return {.panel = ITEM_MENU_PANEL_ACTIVE_ITEMS, .cursor = i};
+        if (Rect{q.x - 4, q.y - 4, 40, 40}.Contains(p)) {
+            return {ITEM_MENU_PANEL_ACTIVE_ITEMS, i};
         }
     }
     for (int i = 0; i < 2; ++i) {
@@ -272,18 +221,14 @@ Target Hit(CMenuItemInfo &menu, Point p, int count) {
             continue;
         }
         Point q = FormPoint(form, icon->name);
-        if (Rect{.x = q.x - 4, .y = q.y - 4, .w = 40, .h = 40}.Contains(p)) {
-            return {.panel = ITEM_MENU_PANEL_EQUIPMENT, .cursor = i};
+        if (Rect{q.x - 4, q.y - 4, 40, 40}.Contains(p)) {
+            return {ITEM_MENU_PANEL_EQUIPMENT, i};
         }
     }
-    if (const Target bait = BaitHit(menu, form, p)) {
-        return bait;
-    }
     // The model occupies the space between the active items and the weapons.
-    Point active = FormPoint(form, "c_i0");
-    Point weapon = FormPoint(form, "c_w0");
-    if (Rect{.x = active.x + 20, .y = active.y + 48, .w = 180, .h = weapon.y - active.y - 62}.Contains(p)) {
-        return {.panel = ITEM_MENU_PANEL_CHARA, .cursor = 0};
+    Point active = FormPoint(form, "c_i0"), weapon = FormPoint(form, "c_w0");
+    if (Rect{active.x + 20, active.y + 48, 180, weapon.y - active.y - 62}.Contains(p)) {
+        return {ITEM_MENU_PANEL_CHARA, 0};
     }
     return {};
 }
@@ -306,18 +251,17 @@ Point Start(CMenuItemInfo &menu, CMenuKeyFunc &keys) {
     if (menu.mode == MENU_ASK_MODE_ITEM_COMMAND && menu.ask_para.mes_no >= 0 && menu.ask_para.mes_no < 9) {
         auto *message = MenuDCMsg[menu.ask_para.mes_no];
         if (message && message->GetMsgCursor() >= 0) {
-            int dx = 0;
-            int dy = 0;
+            int dx = 0, dy = 0;
             message->CalcCenteringXY(&dx, &dy);
-            return {.x = message->text_x + message->draw_off_x + dx + message->text_w * 0.5f,
-                    .y = message->text_y + message->draw_off_y + dy + (message->GetMsgCursor() + 0.5f) * message->font_h};
+            return {message->text_x + message->draw_off_x + dx + message->text_w * 0.5f,
+                    message->text_y + message->draw_off_y + dy + (message->GetMsgCursor() + 0.5f) * message->font_h};
         }
     }
     if (menu.key_arg_no == ITEM_MENU_PANEL_BAG) {
-        return {.x = MenuItemBrdUnderBrdPosXY[0] + (keys.cursor % 6) * 40 + 20,
-                .y = MenuItemBrdUnderBrdPosXY[1] + (keys.cursor / 6) * 50 + 25};
+        return {MenuItemBrdUnderBrdPosXY[0] + (keys.cursor % 6) * 40 + 20,
+                MenuItemBrdUnderBrdPosXY[1] + (keys.cursor / 6) * 50 + 25};
     }
-    Point p{.x = 256, .y = 240};
+    Point p{256, 240};
     if (keys.cursor_form) {
         p = FormPoint(keys.cursor_form, "cursor0");
         p.x += 26;
@@ -328,10 +272,10 @@ Point Start(CMenuItemInfo &menu, CMenuKeyFunc &keys) {
 
 Take TakePointer() {
     const auto &sample = MenuMouseTake();
-    // Hit tests use the retail layout, so the pointer moves back the way its spread panel moved.
-    pointer.pos = {.x = menuworld::RetailPointerX(sample.x), .y = sample.y};
+    pointer.pos = {sample.x, sample.y};
     pointer.pointing = sample.pointing;
-    return {.pointing = sample.pointing, .moved = sample.moved || sample.clicked != 0 || sample.wheel != 0, .pressed = sample.clicked, .released = sample.released, .held = sample.held, .wheel = sample.wheel};
+    return {sample.pointing, sample.moved || sample.clicked != 0 || sample.wheel != 0,
+            sample.clicked, sample.released, sample.held, sample.wheel};
 }
 
 void Commands(CMenuItemInfo &menu, const Take &take) {
@@ -372,16 +316,16 @@ void Question(CMenuItemInfo &menu, CMenuKeyFunc &keys, const Take &take) {
     if (quantity && quantity->draw_flag) {
         // The quantity board repositions its parts above or below the hand.
         // Use those parts rather than assuming which side has room.
-        Point up = FormPoint(quantity, "up");
-        Point down = FormPoint(quantity, "down");
-        Rect  area{.x = std::min(up.x, down.x) - 12, .y = std::min(up.y, down.y) - 12, .w = std::abs(up.x - down.x) + 48, .h = std::abs(up.y - down.y) + 48};
+        Point up = FormPoint(quantity, "up"), down = FormPoint(quantity, "down");
+        Rect  area{std::min(up.x, down.x) - 12, std::min(up.y, down.y) - 12,
+                  std::abs(up.x - down.x) + 48, std::abs(up.y - down.y) + 48};
         if (area.Contains(pointer.pos)) {
             if (take.wheel != 0) {
                 synthetic = take.wheel > 0 ? PAD_UP : PAD_DOWN;
             } else if (take.pressed & 1) {
-                if (Rect{.x = up.x - 6, .y = up.y - 6, .w = 32, .h = 24}.Contains(pointer.pos)) {
+                if (Rect{up.x - 6, up.y - 6, 32, 24}.Contains(pointer.pos)) {
                     synthetic = PAD_UP;
-                } else if (Rect{.x = down.x - 6, .y = down.y - 6, .w = 32, .h = 24}.Contains(pointer.pos)) {
+                } else if (Rect{down.x - 6, down.y - 6, 32, 24}.Contains(pointer.pos)) {
                     synthetic = PAD_DOWN;
                 } else {
                     synthetic = PAD_CROSS;
@@ -391,12 +335,11 @@ void Question(CMenuItemInfo &menu, CMenuKeyFunc &keys, const Take &take) {
         return;
     }
     if (menu.mode == MENU_ASK_MODE_EXTEND && menu.ask_para.ask_mode == MENU_ITEM_EXTEND_BUILD_UP && menu.step == 0) {
-        const int     count = std::clamp(BuildUpWeaponInfo.select_num, 0, 3);
         MenuMouseRect rows[3]{};
-        for (int i = 0; i < count; ++i) {
-            rows[i] = {.x = static_cast<float>(BuildUpNameXY[i][0]), .y = static_cast<float>(BuildUpNameXY[i][1]), .w = 200, .h = 24};
+        for (int i = 0; i < std::clamp(int(BuildUpWeaponInfo.select_num), 0, 3); ++i) {
+            rows[i] = {float(BuildUpNameXY[i][0]), float(BuildUpNameXY[i][1]), 200, 24};
         }
-        BuildUpWeaponInfo.select_no = MenuMouseRows({rows, static_cast<std::size_t>(count)}, BuildUpWeaponInfo.select_no);
+        BuildUpWeaponInfo.select_no = MenuMouseRows({rows, static_cast<std::size_t>(std::clamp(int(BuildUpWeaponInfo.select_num), 0, 3))}, BuildUpWeaponInfo.select_no);
         synthetic = MenuMouseButtons();
         return;
     }
@@ -459,25 +402,12 @@ void MenuMousePadTick() {
 
 bool MenuMouseItemActive() { return ItemPage(); }
 
-bool MenuMouseHeldItemAt(float &x, float &y) {
-    if (!ItemPage() || MenuCommonInfo->have_item.item_no <= 0) {
-        return false;
-    }
-    const MenuMouseSample sample = MenuMouseDisplaySample();
-    if (!sample.pointing) {
-        return false;
-    }
-    x = sample.x;
-    y = sample.y;
-    return true;
-}
-
 void MenuMouseItemOrigin(float &x, float &y) {
     if (!ItemPage()) {
         return;
     }
     const Point start = Start(class_menu_item_info, *MenuCommonInfo);
-    x = menuworld::SpreadX(start.x);
+    x = start.x;
     y = start.y;
 }
 
@@ -503,15 +433,11 @@ void MenuMouseUpdate(CMenuKeyFunc &keys) {
         bag_top = keys.top_line;
         return;
     }
-    Take       take = TakePointer();
-    const bool pad = PadActive();
-    if (view != menu.view_mode || pad) {
+    Start(menu, keys);
+    Take take = TakePointer();
+    if (view != menu.view_mode || PadActive()) {
         gesture.Reset();
         view = menu.view_mode;
-    }
-    // After a pad takeover, a carried item stays where retail input leaves it.
-    if (pad) {
-        finish_drop = false;
     }
     if (!take.pointing || !keys.key_enable || GamePad__2.key_lock || menu_debug_flag ||
         menu.mode == MENU_ASK_MODE_OPEN || menu.mode == MENU_ASK_MODE_CLOSE ||
@@ -519,15 +445,11 @@ void MenuMouseUpdate(CMenuKeyFunc &keys) {
         gesture.Reset();
         return;
     }
-    // A drop can open a retail question, such as attaching a synth sphere. Once
-    // it closes, an item still carried returns as after a refused drop.
-    if (finish_drop && menu.mode == MENU_ASK_MODE_NONE) {
+    if (finish_drop) {
         finish_drop = false;
-        if (keys.have_item.item_no > 0) {
+        if (menu.mode == MENU_ASK_MODE_NONE && keys.have_item.item_no > 0) {
             // A swap leaves the destination item on the cursor. Retail's return
             // operation puts it in the original slot, or retains it if refused.
-            // Like retail's leave-page key, a refused return (no room) also goes
-            // back to the active character's page.
             menu.IsCancelNoneLoadItem();
         }
     }

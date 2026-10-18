@@ -6,7 +6,6 @@
 #include "gamepad.hpp"
 #include "mainloop.hpp"
 #include "menu_mouse.hpp"
-#include "menu_mouse_item.hpp"
 #include "menumain.hpp"
 #include "menushop.hpp"
 
@@ -15,12 +14,30 @@ CShopMenu          *shop_menu = nullptr;
 CShop              *shop_stock = nullptr;
 CMenuPosDataManage *shop_forms = nullptr;
 
+int BagHit(const MenuMouseSample &mouse, CMenuPosDataForm *board, int count) {
+    if (!board || !board->draw_flag) {
+        return -1;
+    }
+    float x, y;
+    board->GetPutPosXY(nullptr, x, y);
+    if (!MenuMouseRect{x + 16, y + 20, 240, 250}.Contains(mouse.x, mouse.y)) {
+        return -1;
+    }
+    const float bx = MenuItemBrdUnderBrdPosXY[0], by = MenuItemBrdUnderBrdPosXY[1];
+    if (mouse.x < bx || mouse.x >= bx + 240 || mouse.y < by) {
+        return -1;
+    }
+    const int slot = int((mouse.y - by) / 50) * 6 + int((mouse.x - bx) / 40);
+    return slot < count ? slot : -1;
+}
+} // namespace
+
 void MenuMouseShopUpdate(CShopMenu &menu, CMenuKeyFunc &keys, int goods) {
     const auto &mouse = MenuMouseTake();
     const int   shared_buttons = MenuMouseButtons();
     MenuMouseSetButtons(0); // The shop owns this tick's mouse actions.
     if (!mouse.pointing || !keys.key_enable || GamePad__2.key_lock || menu_debug_flag ||
-        menu.mode != MENU_ASK_MODE_NONE || (MenuMoveItemPtr && MenuMoveItemPtr->move_on)) {
+        menu.mode != 0 || (MenuMoveItemPtr && MenuMoveItemPtr->move_on)) {
         return;
     }
     if (mouse.clicked & 2) {
@@ -32,18 +49,15 @@ void MenuMouseShopUpdate(CShopMenu &menu, CMenuKeyFunc &keys, int goods) {
     if (menu.key_arg_no == SHOP_MENU_MODE_BUY_LIST || menu.key_arg_no == SHOP_MENU_MODE_BAG) {
         auto     *board = MenuPosData->GetFormInfo("itembrd");
         const int bag_count = GetNowBagMax(ITEM_BOARD_MAIN);
-        const int bag = menumouse::BagHit({.x = mouse.x, .y = mouse.y}, board, bag_count);
+        const int bag = BagHit(mouse, board, bag_count);
         int       row = -1;
         if (menu.item_brd && menu.item_brd->draw_flag && menu.item_list && menu.item_list->draw_flag) {
-            float x;
-            float y;
-            float clip_x;
-            float clip_y;
+            float x, y, clip_x, clip_y;
             menu.item_list->GetPutPosXY(nullptr, x, y);
             menu.item_brd->GetPutPosXY(nullptr, clip_x, clip_y);
-            if (MenuMouseRect{.x = clip_x + 14, .y = clip_y + 44, .w = 184, .h = SHOP_LIST_LINE * 44}.Contains(mouse.x, mouse.y) &&
+            if (MenuMouseRect{clip_x + 14, clip_y + 44, 184, SHOP_LIST_LINE * 44}.Contains(mouse.x, mouse.y) &&
                 mouse.y >= y + 44) {
-                const int hit = static_cast<int>((mouse.y - y - 44) / 44);
+                const int hit = int((mouse.y - y - 44) / 44);
                 if (hit < goods) {
                     row = hit;
                 }
@@ -106,7 +120,6 @@ void MenuMouseShopUpdate(CShopMenu &menu, CMenuKeyFunc &keys, int goods) {
     }
     MenuMouseSetButtons(buttons);
 }
-} // namespace
 
 void MenuMouseShopTick(CMenuKeyFunc &keys) {
     if (&keys == MenuCommonInfo && keys.now_mode == MENU_MODE_SHOP && shop_menu && shop_stock && shop_forms == MenuPosData) {

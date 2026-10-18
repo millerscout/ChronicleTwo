@@ -123,15 +123,15 @@ if ($command -eq 'build') {
 
 # A fast source-metadata/version check skips extraction for current data. The explicit
 # dc2data check command still performs a full output hash audit.
-# The retail image by name, else any disc image in rom/pal, else the PS2 build's extracted disc.
 $source = Join-Path $checkout 'rom/pal/Dark Chronicle (PAL).iso'
 if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-    $source = Get-ChildItem -LiteralPath (Join-Path $checkout 'rom/pal') -Filter '*.iso' -File -ErrorAction Ignore |
-        Sort-Object Name | Select-Object -First 1 -ExpandProperty FullName
-}
-if (-not $source) {
-    $source = Join-Path $checkout 'rom/pal/extracted/iso'
-    if (-not (Test-Path -LiteralPath $source -PathType Container)) { $source = $null }
+    $palIsos = @(Get-ChildItem -Path (Join-Path $checkout 'rom/pal') -Filter '*.iso' -File -ErrorAction SilentlyContinue)
+    if ($palIsos.Count -gt 0) {
+        $source = $palIsos[0].FullName
+    } else {
+        $source = Join-Path $checkout 'rom/pal/extracted/iso'
+        if (-not (Test-Path -LiteralPath $source -PathType Container)) { $source = $null }
+    }
 }
 
 # dc2data takes <game-root>\data and publishes <game-root>\data.zip beside data.json.

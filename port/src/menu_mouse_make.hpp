@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <span>
 
 #include "menu_mouse_item.hpp"
 
@@ -45,7 +44,7 @@ struct MakeBoard {
 };
 
 // pos is the board form's position; info is MakeBoardDrawInfo as the board last drew it.
-MakeBoard MakeBoardRects(Point pos, std::span<const float, 5> info) noexcept;
+MakeBoard MakeBoardRects(Point pos, const float *info);
 
 // The make row to select (0 Make, 1 Quit, -1 none) and the retail buttons for this tick.
 struct MakeInput {

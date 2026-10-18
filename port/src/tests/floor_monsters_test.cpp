@@ -11,15 +11,39 @@
 #include "menusys.hpp"
 #include "monster.hpp"
 #include "platform/config.hpp"
+#include "platform/config_catalog.hpp"
 
 namespace {
 
-// Mount Gundor's Deathtrap (mos_place4, floor 13) in shape: four kinds and a King Mimic.
-constexpr std::array kDeathtrap = {37, 137, 37, 149, 254, 201, 149};
+config_catalog::Command Tag(std::string name, std::vector<int> values) {
+    config_catalog::Command command;
+    command.name = std::move(name);
+    for (int value : values) {
+        command.arguments.push_back({value});
+    }
+    return command;
+}
+
+// Mount Gundor's Deathtrap (mos_place4, FLS 13) in shape: four kinds, a King Mimic, and a floor either side.
+config_catalog::Document Deathtrap() {
+    config_catalog::Document document;
+    document.commands = {
+        Tag("FLS", {12, 2}),
+        Tag("FL", {22, 2200, 22, 2201}),
+        Tag("FLE", {}),
+        Tag("FLS", {13, 23}),
+        Tag("FL", {37, 3700, 137, 13700, 37, 3701, 149, 14900}),
+        Tag("FL", {254, 25400, 201, 20100, 149, 14901}),
+        Tag("FLE", {}),
+        Tag("FLS", {14, 1}),
+        Tag("FL", {65, 6500}),
+        Tag("FLE", {}),
+    };
+    return document;
+}
 
 std::vector<int> Ids(const std::vector<floor_monsters::Species> &species) {
     std::vector<int> ids;
-    ids.reserve(species.size());
     for (const auto &kind : species) {
         ids.push_back(kind.id);
     }
@@ -33,7 +57,7 @@ int Width(const std::string &text) {
 } // namespace
 
 TEST(FloorMonsters, FloorSpeciesCountsTheFloorsListInOrderAndKeysItsFirstEntry) {
-    const auto species = floor_monsters::FloorSpecies(kDeathtrap, 24);
+    const auto species = floor_monsters::FloorSpecies(Deathtrap(), 13, 24);
     EXPECT_EQ(Ids(species), (std::vector<int>{37, 137, 149, 254, 201}));
     EXPECT_EQ(species[0].count, 2);
     EXPECT_EQ(species[2].count, 2);
@@ -42,13 +66,35 @@ TEST(FloorMonsters, FloorSpeciesCountsTheFloorsListInOrderAndKeysItsFirstEntry) 
     for (std::size_t i = 1; i < species.size(); ++i) {
         EXPECT_FALSE(species[i].key) << species[i].id;
     }
-    EXPECT_TRUE(floor_monsters::FloorSpecies({}, 24).empty());
+    EXPECT_EQ(Ids(floor_monsters::FloorSpecies(Deathtrap(), 14, 24)), (std::vector<int>{65}));
+    EXPECT_TRUE(floor_monsters::FloorSpecies(Deathtrap(), 8, 24).empty());
+}
+
+TEST(FloorMonsters, FloorSpeciesFollowsRetailTagsForRepeatsAndStrayEntries) {
+    config_catalog::Document document;
+    document.commands = {
+        Tag("FL", {1, 100}), // before any FLS: no floor is listing
+        Tag("FLS", {3, 1}),
+        Tag("FL", {2, 200}),
+        Tag("FLE", {}),
+        Tag("FL", {4, 400}), // after FLE: ignored
+        Tag("FLS", {3, 1}),
+        Tag("FL", {5, 500, 5, 501}), // a second block for the floor starts it again
+    };
+    const auto species = floor_monsters::FloorSpecies(document, 3, 24);
+    ASSERT_EQ(Ids(species), (std::vector<int>{5}));
+    EXPECT_EQ(species[0].count, 2);
 }
 
 TEST(FloorMonsters, MimicsNeverCarryTheKeyAndAlwaysBecomeChestsPastTheCap) {
-    constexpr std::array ids = {static_cast<int>(MONSTER_ID_MIMIC_FIRST), 7, 8, static_cast<int>(MONSTER_ID_MIMIC_LAST)};
+    config_catalog::Document document;
+    document.commands = {
+        Tag("FLS", {1, 4}),
+        Tag("FL", {MONSTER_ID_MIMIC_FIRST, 0, 7, 700, 8, 800, MONSTER_ID_MIMIC_LAST, 1}),
+        Tag("FLE", {}),
+    };
     // AutoSetMonster places the first cap entries; the treasure boxes take every mimic.
-    const auto species = floor_monsters::FloorSpecies(ids, 2);
+    const auto species = floor_monsters::FloorSpecies(document, 1, 2);
     EXPECT_EQ(Ids(species), (std::vector<int>{MONSTER_ID_MIMIC_FIRST, 7, MONSTER_ID_MIMIC_LAST}));
     for (const auto &kind : species) {
         EXPECT_FALSE(kind.key) << kind.id;
@@ -104,9 +150,9 @@ TEST(FloorMonsters, TextsKeepTheNamesAndAddCountsAndPercents) {
 
 TEST(FloorMonsters, LayoutWrapsDropsAndKeepsEachMonsterOnOnePage) {
     const std::vector<floor_monsters::Entry> entries{
-        {.name = "Griffon Soldier x6", .key = "Magma Rock", .drops = {"Cheese 13%", "Protector Crystal 4%", "Hunk of Copper 25%"}},
-        {.name = "King Mimic x1",      .key = "",           .drops = {}                                                          },
-        {.name = "Savage Ram x6",      .key = "",           .drops = {"Mimi 13%", "Hunter Crystal 4%", "Sturdy Cloth 25%"}       },
+        {"Griffon Soldier x6", "Magma Rock", {"Cheese 13%", "Protector Crystal 4%", "Hunk of Copper 25%"}},
+        {"King Mimic x1",      "",           {}                                                          },
+        {"Savage Ram x6",      "",           {"Mimi 13%", "Hunter Crystal 4%", "Sturdy Cloth 25%"}       },
     };
     // 7 per character: the first entry's three drops (10, 20 and 18 characters) need two rows in 260.
     const auto pages = floor_monsters::Layout(entries, 260, 16, 14, 4, Width);
@@ -141,26 +187,26 @@ TEST(FloorMonsters, TriangleOpensThePageAfterTheInformationOrTheLastMaterialsPag
     info.info_view = true;
     info.asking = true;
     info.has_monsters = true;
-    EXPECT_EQ(floor_monsters::Decide(info, MENU_PUSH_BUTTON_TRIANGLE), Action::Open);
-    EXPECT_EQ(floor_monsters::Decide(info, MENU_PUSH_BUTTON_CANCEL), Action::None);
+    EXPECT_EQ(floor_monsters::Decide(info, MENU_PUSH_BUTTON_TRIANGLE), Action::kOpen);
+    EXPECT_EQ(floor_monsters::Decide(info, MENU_PUSH_BUTTON_CANCEL), Action::kNone);
     auto with_materials = info;
     with_materials.materials = 3; // retail's Triangle opens the materials list instead
-    EXPECT_EQ(floor_monsters::Decide(with_materials, MENU_PUSH_BUTTON_TRIANGLE), Action::None);
+    EXPECT_EQ(floor_monsters::Decide(with_materials, MENU_PUSH_BUTTON_TRIANGLE), Action::kNone);
     auto empty = info;
     empty.has_monsters = false;
-    EXPECT_EQ(floor_monsters::Decide(empty, MENU_PUSH_BUTTON_TRIANGLE), Action::None);
+    EXPECT_EQ(floor_monsters::Decide(empty, MENU_PUSH_BUTTON_TRIANGLE), Action::kNone);
     auto question = info;
     question.info_view = false; // the jump question
-    EXPECT_EQ(floor_monsters::Decide(question, MENU_PUSH_BUTTON_TRIANGLE), Action::None);
+    EXPECT_EQ(floor_monsters::Decide(question, MENU_PUSH_BUTTON_TRIANGLE), Action::kNone);
 
     floor_monsters::View materials;
     materials.key_arg_no = DNG_TREE_MAP_SCREEN_MATERIALS;
     materials.has_monsters = true;
     materials.materials = DNG_TREE_MAP_MATERIA_PAGE + 1;
-    EXPECT_EQ(floor_monsters::Decide(materials, MENU_PUSH_BUTTON_TRIANGLE), Action::None); // retail turns the page
+    EXPECT_EQ(floor_monsters::Decide(materials, MENU_PUSH_BUTTON_TRIANGLE), Action::kNone); // retail turns the page
     materials.materials_page = 1;
-    EXPECT_EQ(floor_monsters::Decide(materials, MENU_PUSH_BUTTON_TRIANGLE), Action::Open);
-    EXPECT_EQ(floor_monsters::Decide(materials, MENU_PUSH_BUTTON_CANCEL), Action::None); // retail closes the list
+    EXPECT_EQ(floor_monsters::Decide(materials, MENU_PUSH_BUTTON_TRIANGLE), Action::kOpen);
+    EXPECT_EQ(floor_monsters::Decide(materials, MENU_PUSH_BUTTON_CANCEL), Action::kNone); // retail closes the list
 }
 
 TEST(FloorMonsters, ThePageTurnsOnTriangleAndClosesOnItsLastPageOrCancel) {
@@ -168,11 +214,11 @@ TEST(FloorMonsters, ThePageTurnsOnTriangleAndClosesOnItsLastPageOrCancel) {
     floor_monsters::View view;
     view.key_arg_no = floor_monsters::kScreenMonsters;
     view.pages = 2;
-    EXPECT_EQ(floor_monsters::Decide(view, MENU_PUSH_BUTTON_TRIANGLE), Action::NextPage);
-    EXPECT_EQ(floor_monsters::Decide(view, MENU_PUSH_BUTTON_CANCEL), Action::Close);
-    EXPECT_EQ(floor_monsters::Decide(view, MENU_PUSH_BUTTON_DECIDE), Action::None);
+    EXPECT_EQ(floor_monsters::Decide(view, MENU_PUSH_BUTTON_TRIANGLE), Action::kNextPage);
+    EXPECT_EQ(floor_monsters::Decide(view, MENU_PUSH_BUTTON_CANCEL), Action::kClose);
+    EXPECT_EQ(floor_monsters::Decide(view, MENU_PUSH_BUTTON_DECIDE), Action::kNone);
     view.page = 1;
-    EXPECT_EQ(floor_monsters::Decide(view, MENU_PUSH_BUTTON_TRIANGLE), Action::Close);
+    EXPECT_EQ(floor_monsters::Decide(view, MENU_PUSH_BUTTON_TRIANGLE), Action::kClose);
 }
 
 TEST(FloorMonsters, BorneoMakesTheThirdSlotCertain) {
@@ -254,7 +300,7 @@ TEST(FloorMonsters, TurningOffWithTheListOpenGoesBackToRetailsInformation) {
     floor_monsters::Changes    changes;
     floor_monsters::RetailInfo info = FreshOffInformation();
     floor_monsters::MovePrompt(info, changes, 480);
-    // Triangle opened the list (AfterStep's Open); with the setting off, Triangle leaves retail's information as is.
+    // Triangle opened the list (AfterStep's kOpen); with the setting off, Triangle leaves retail's information as is.
     info.key_arg_no = floor_monsters::kScreenMonsters;
     info.info_view = false;
     info.draw_alpha = 0;

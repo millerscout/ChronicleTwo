@@ -41,40 +41,26 @@ def load_port_override(path: Path):
 # change; all calls in the original unit still reach the native public seam.
 RETAIL_BRIDGES = {
     "editctrl.cpp": [("ResetViewMode(CScene*)", "ResetViewMode", "PortRetailResetViewMode")],
-    "editloop.cpp": [
-        ("UpdateTrBoxFlag(int)", "UpdateTrBoxFlag", "PortRetailUpdateTrBoxFlag"),
-        ("EditDraw()", "EditDraw", "PortRetailEditDraw"),
-    ],
+    "editloop.cpp": [("UpdateTrBoxFlag(int)", "UpdateTrBoxFlag", "PortRetailUpdateTrBoxFlag")],
     "dng_main.cpp": [
         ("ResetEyeView(CActionChara*)", "ResetEyeView", "PortRetailResetEyeView"),
         ("ChangeSetUnit(int)", "ChangeSetUnit", "PortRetailChangeSetUnit"),
         ("DngMainKey()", "DngMainKey", "PortRetailDngMainKey"),
-        ("DngMainDraw()", "DngMainDraw", "PortRetailDngMainDraw"),
     ],
-    "menumain.cpp": [
-        ("MenuMainInit(MENU_INIT_ARG*)", "MenuMainInit", "PortRetailMenuMainInit"),
-        ("MenuMainExit()", "MenuMainExit", "PortRetailMenuMainExit"),
-        ("MenuWorldTrans()", "MenuWorldTrans", "PortRetailMenuWorldTrans"),
-    ],
-    "menudraw.cpp": [("DrawMenuFillBox(int,int,int,int)", "DrawMenuFillBox", "PortRetailDrawMenuFillBox")],
     "charasetup.cpp": [("GetRoboPartsInfo(CUserDataManager*)", "GetRoboPartsInfo", "PortRetailGetRoboPartsInfo")],
     "menusys.cpp": [
         ("CBaseMenuClass::MenuItemCommandSelect(int,int)", "MenuItemCommandSelect", "PortRetailMenuItemCommandSelect"),
-        ("MenuItemSelectInit(mgCMemory*,int*,int)", "MenuItemSelectInit", "PortRetailMenuItemSelectInit"),
-        ("MenuItemSelectDraw()", "MenuItemSelectDraw", "PortRetailMenuItemSelectDraw"),
+        ("CMenuItemInfo::PushKey(int,int)", "PushKey", "PortRetailMenuItemInfoPushKey"),
+        ("CMenuItemInfo::KeyStepLocal(int,int,int)", "KeyStepLocal", "PortRetailMenuItemInfoKeyStepLocal"),
         ("MenuItemDraw()", "MenuItemDraw", "PortRetailMenuItemDraw"),
     ],
     "dngmenu.cpp": [
         ("CMenuTreeMap::Step()", "Step", "PortRetailStep"),
         ("CMenuTreeMap::Draw()", "Draw", "PortRetailDraw"),
     ],
-    "title.cpp": [("TitleCopyRightStep()", "TitleCopyRightStep", "PortRetailTitleCopyRightStep")],
     "menuchr.cpp": [
         ("InitMainCharaBG(int,mgCMemory*,int)", "InitMainCharaBG", "PortRetailInitMainCharaBG"),
         ("KeyMainCharaBG()", "KeyMainCharaBG", "PortRetailKeyMainCharaBG"),
-    ],
-    "mg_dataset.cpp": [
-        ("CopyFrame(mgCFrame*,mgCFrame*,mgCMemory*,int,mgCFrame**)", "CopyFrame", "PortRetailCopyFrame"),
     ],
 }
 
@@ -95,45 +81,6 @@ def retail_bridges(port_override, source: Path, long_is_64: bool) -> str:
         marker = f'#line {line} "{source.resolve().as_posix()}"\n'
         bodies.append(marker + body.replace(name + "(", bridge + "(", 1))
     return "\n".join(bodies)
-
-
-# Retail loaders that read a configuration script in the middle of other work keep that work; only
-# their interpreter run is replaced with the call that applies the native document. Each entry names
-# the loader's definition line and the call; the stub header of the unit declares the callee.
-CONFIG_SEAMS = {
-    "editmap.cpp": [("void CEditMap::LoadEditInfo(char *script, int size, mgCMemory *stack) {",
-                     "PortApplyEditMapConfig(this, script, size, stack);")],
-    "mapsky.cpp": [("static void LoadSkyPack(MAP_SKY_INFO *info, char *script, int size) {",
-                    "PortLoadSkyInfo(info, script, size);")],
-    # Character cloth scripts embedded in .game.json resources are typed command lists, not text.
-    "dynamicanime.cpp": [("void CDynamicAnime::Load(char *name, int size, mgCFrame *frame, mgCMemory *memory) {",
-                          "PortRunDynamicAnimeScript(dynmc_tag, name, size);", "CScriptInterpreter interp;",
-                          "interp.Run();")],
-}
-INTERPRETER_START = "CScriptInterpreter interpreter;"
-INTERPRETER_END = "interpreter.Run();"
-
-
-def config_seams(text: str, unit: str) -> str:
-    """Replace each listed loader's interpreter run with its native call, keeping every line number."""
-    for definition, call, *markers in CONFIG_SEAMS.get(unit, []):
-        first, last = markers if markers else (INTERPRETER_START, INTERPRETER_END)
-        anchor = text.index(definition)
-        start = text.index(first, anchor)
-        end = text.index(last, start) + len(last)
-        lines = text.count("\n", start, end)
-        text = text[:start] + call + "\n" * lines + text[end:]
-    return text
-
-
-def native_bridge(unit: str):
-    """The port/src file appended to a unit's copy: character.cpp's metadata bridge, or
-    port/src/<unit>_config_bridge.inc, whose code reaches the unit's file statics and types."""
-    source = Path(__file__).resolve().parents[2] / "port/src"
-    if unit == "character.cpp":
-        return source / "character_metadata_bridge.inc"
-    bridge = source / (Path(unit).stem + "_config_bridge.inc")
-    return bridge if bridge.is_file() else None
 
 
 def prepare_menu_character_arena(text: str) -> str:
@@ -166,7 +113,6 @@ def main() -> None:
         sys.exit(str(error))
 
     text += "\n" + retail_bridges(port_override, args.source, args.long_is_64)
-    text = config_seams(text, args.source.name)
     if args.source.name == "menuchr.cpp":
         text = prepare_menu_character_arena(text)
     if args.source.name == "dng_main.cpp":
@@ -180,9 +126,16 @@ def main() -> None:
 """ + text[end:]
         bridge_header = Path(__file__).resolve().parents[2] / "port/src/dungeon_articles.hpp"
         text = f'#include "{bridge_header.as_posix()}"\n' + text
-    bridge = native_bridge(args.source.name)
-    if bridge is not None:
-        text +=f'\n#include "{bridge.as_posix()}"\n'
+    native_bridges = {
+        "character.cpp": "character_metadata_bridge.inc",
+        "npccfg.cpp": "npccfg_config_bridge.inc",
+        "vlgr_info.cpp": "vlgr_info_config_bridge.inc",
+        "movieviewlp.cpp": "movieviewlp_config_bridge.inc",
+        "editdebug.cpp": "editdebug_config_bridge.inc",
+    }
+    if args.source.name in native_bridges:
+        bridge = Path(__file__).resolve().parents[2] / "port/src" / native_bridges[args.source.name]
+        text += f'\n#include "{bridge.as_posix()}"\n'
     fixed = header_fixups.fixup_unit_text(args.output.name, text.encode("utf-8", errors="surrogateescape")
                                           .decode("latin-1"))
     final = native_asset_paths.rewrite(long64.rewrite(fixed), args.source.name).encode("latin-1")

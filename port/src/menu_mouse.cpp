@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <utility>
 #include <vector>
 
 #include "gamepad.hpp"
@@ -57,6 +56,9 @@ struct ListClick {
     int         seen = -100, ready = 0, target = -1;
     bool        pending = false;
 } list_click;
+
+void SetCapture(bool on);
+
 } // namespace
 
 bool MenuMouseRect::Contains(float px, float py) const {
@@ -68,7 +70,7 @@ float MenuMouseUnits(float scale, float pixels, float window) {
 }
 
 int MenuMouseHit(std::span<const MenuMouseRect> rows, float x, float y) {
-    for (int i = 0; std::cmp_less(i, rows.size()); ++i) {
+    for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
         if (rows[i].Contains(x, y)) {
             return i;
         }
@@ -77,11 +79,9 @@ int MenuMouseHit(std::span<const MenuMouseRect> rows, float x, float y) {
 }
 
 MenuMouseRect MenuMouseClip(MenuMouseRect rect, MenuMouseRect clip) {
-    const float left = std::max(rect.x, clip.x);
-    const float top = std::max(rect.y, clip.y);
-    const float right = std::min(rect.x + rect.w, clip.x + clip.w);
-    const float bottom = std::min(rect.y + rect.h, clip.y + clip.h);
-    return right > left && bottom > top ? MenuMouseRect{.x = left, .y = top, .w = right - left, .h = bottom - top} : MenuMouseRect{};
+    const float left = std::max(rect.x, clip.x), top = std::max(rect.y, clip.y);
+    const float right = std::min(rect.x + rect.w, clip.x + clip.w), bottom = std::min(rect.y + rect.h, clip.y + clip.h);
+    return right > left && bottom > top ? MenuMouseRect{left, top, right - left, bottom - top} : MenuMouseRect{};
 }
 
 int MenuMouseChoose(const MenuMouseSample &mouse, std::span<const MenuMouseRect> rows, int selected, int wheel_step) {
@@ -113,10 +113,9 @@ MenuMouseRect MenuMousePart(CMenuPosDataForm *form, const char *name) {
     if (!part || !part->draw_flag) {
         return {};
     }
-    float x = 0;
-    float y = 0;
+    float x, y;
     form->GetPutPosXY(part->name, x, y);
-    return {.x = x, .y = y, .w = part->w, .h = part->h};
+    return {x, y, float(part->w), float(part->h)};
 }
 
 MenuMouseView MenuMouseScroll(float wheel, MenuMouseView view, int count, int visible, int hovered) {
@@ -142,20 +141,24 @@ bool PadOrFocusOwnsPointer() {
     const bool inactive = WindowCurrentMode(mode) &&
                           (!MouseInputLive() || !(SDL_GetWindowFlags(WindowHandle()) & SDL_WINDOW_INPUT_FOCUS));
     return inactive || pad.buttons || GamePad__2.pad[0].button ||
-           std::abs(static_cast<int>(pad.left_x) - 128) > 30 || std::abs(static_cast<int>(pad.left_y) - 128) > 30;
+           std::abs(int(pad.left_x) - 128) > 30 || std::abs(int(pad.left_y) - 128) > 30;
 }
 
 void MovePointer(MenuMouseSample &point, float dx, float dy) {
-    const auto extent = mgPortVisibleUiExtent(gfx::kMainTarget);
-    float      units_x = 1;
-    float      units_y = 1;
+    const auto extent = mgPortVisibleExtent(gfx::kMainTarget);
+    float      left = extent.left, top = extent.top, right = extent.right, bottom = extent.bottom;
+    float      units_x = 1, units_y = 1;
     if (mgPortRendererReady()) {
         const auto mapping = gfx::GetUiMapping(gfx::kMainTarget);
-        int        width = static_cast<int>(mapping.pixel_width);
-        int        height = static_cast<int>(mapping.pixel_height);
+        const auto scene = gfx::GetLogicalMapping(gfx::kMainTarget);
+        int        width = static_cast<int>(mapping.pixel_width), height = static_cast<int>(mapping.pixel_height);
         WindowSize(width, height);
         units_x = MenuMouseUnits(mapping.scale_x, mapping.pixel_width, width);
         units_y = MenuMouseUnits(mapping.scale_y, mapping.pixel_height, height);
+        left = (extent.left * scene.scale_x + scene.offset_x - mapping.offset_x) / mapping.scale_x;
+        right = (extent.right * scene.scale_x + scene.offset_x - mapping.offset_x) / mapping.scale_x;
+        top = (extent.top * scene.scale_y + scene.offset_y - mapping.offset_y) / mapping.scale_y;
+        bottom = (extent.bottom * scene.scale_y + scene.offset_y - mapping.offset_y) / mapping.scale_y;
     }
     if (std::isfinite(dx)) {
         point.x += dx * units_x;
@@ -163,8 +166,8 @@ void MovePointer(MenuMouseSample &point, float dx, float dy) {
     if (std::isfinite(dy)) {
         point.y += dy * units_y;
     }
-    point.x = std::clamp(point.x, extent.left, extent.right - 1);
-    point.y = std::clamp(point.y, extent.top, extent.bottom - 1);
+    point.x = std::clamp(point.x, left, right - 1);
+    point.y = std::clamp(point.y, top, bottom - 1);
 }
 
 void SetCapture(bool on) {
@@ -208,7 +211,7 @@ void MenuMouseNoteChoices(const void *owner, int message, std::span<const MenuMo
         return shown.owner == owner && shown.message == message;
     });
     if (window == shown_choices.end()) {
-        shown_choices.push_back({.owner = owner, .message = message, .first = now, .order = ++shown_order, .last = now});
+        shown_choices.push_back({owner, message, now, ++shown_order, now});
         window = shown_choices.end() - 1;
     }
     window->last = now;
@@ -302,7 +305,7 @@ const MenuMouseSample &MenuMouseTake() {
             }
             if (sample.wheel != 0 && std::isfinite(sample.wheel)) {
                 int target = choices.selected + -static_cast<int>(sample.wheel);
-                if (target >= 0 && std::cmp_less(target, choices.rows.size()) && choices.rows[target].w > 0) {
+                if (target >= 0 && target < static_cast<int>(choices.rows.size()) && choices.rows[target].w > 0) {
                     choices.target = target;
                 }
             }
@@ -351,9 +354,10 @@ int MenuMouseRows(std::span<const MenuMouseRect> rows, int selected, int wheel_s
 }
 
 int MenuMouseLanguageButtons(int mask, int language) {
-    // Only a lone Cross or Circle swaps; both together stay as they are.
-    const bool lone = ((mask & PAD_CROSS) != 0) != ((mask & PAD_CIRCLE) != 0);
-    return language == LANG_JAPANESE && lone ? mask ^ (PAD_CROSS | PAD_CIRCLE) : mask;
+    if (language > 0 || ((mask & PAD_CROSS) != 0) == ((mask & PAD_CIRCLE) != 0)) {
+        return mask;
+    }
+    return mask ^ (PAD_CROSS | PAD_CIRCLE);
 }
 
 void MenuMouseLanguageClicks() {
@@ -367,7 +371,7 @@ void MenuMouseLanguageClicks() {
 
 void MenuMouseDelayConfirm(const void *owner, int selected, int target, int ticks) {
     if (list_click.owner != owner || list_click.seen < frame - 1) {
-        list_click = {.owner = owner, .seen = frame, .ready = frame, .target = selected, .pending = false};
+        list_click = {owner, frame, frame, selected, false};
     }
     list_click.seen = frame;
     if (target != list_click.target) {
@@ -397,8 +401,7 @@ MenuMouseSample MenuMouseDisplaySample() {
         point.pointing = false;
         return point;
     }
-    float dx = 0;
-    float dy = 0;
+    float dx = 0, dy = 0;
     InputPeekMenuMouseMotion(dx, dy);
     if (dx != 0 || dy != 0) {
         if (!point.pointing) {
@@ -428,7 +431,7 @@ gfx::InterpKey MenuMouseNoteHand(const gfx::TextureBinding &texture, gfx::Logica
     const auto key = MenuMouseNextHandKey();
     ++hand_index;
     if (enabled) {
-        hand = {.key = key, .texture = texture, .uv = uv, .rotation = rotation, .scale = scale, .alpha = alpha, .seen = mgPortFrameCount()};
+        hand = {key, texture, uv, rotation, scale, alpha, mgPortFrameCount()};
     }
     return key;
 }
@@ -449,8 +452,7 @@ void MenuMouseDraw() {
     state.blend = true;
     state.alpha_test = true;
     state.alpha_func = gfx::AlphaFunc::Greater;
-    const float c = std::cos(hand.rotation);
-    const float s = std::sin(hand.rotation);
+    const float c = std::cos(hand.rotation), s = std::sin(hand.rotation);
     // The pointing fingertip is at the far edge, halfway down the hand's atlas cell. The hand is
     // never mirrored, so its body stays on the same side of the hotspot on every target.
     const float   tip_x = hand.uv.w * hand.scale;
@@ -478,3 +480,5 @@ void MenuMouseClaimButtons(int mask) {
     choices.target = choices.selected;
     choices.confirm = false;
 }
+
+bool MenuMouseActive() { return enabled; }

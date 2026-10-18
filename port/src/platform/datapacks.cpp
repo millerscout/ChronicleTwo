@@ -13,7 +13,6 @@
 #include <list>
 #include <map>
 #include <mutex>
-#include <print>
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
@@ -22,9 +21,9 @@
 
 #define STBI_ONLY_PNG
 #define STBI_NO_STDIO
-#include "kazarov_bridge/rust/lib.h"
 #include "stb_image.h"
 
+#include "kazarov_bridge/rust/lib.h"
 #include "platform/archive_mount.hpp"
 
 namespace datapacks {
@@ -59,8 +58,9 @@ constexpr std::size_t kDecodeCacheBytes = 512ull * 1024 * 1024;
 constexpr unsigned kMaxPrefetchWorkers = 8;
 
 /**
- * One decoded catalog variant, kept so re-entering a texture copies it instead of re-decoding its PNGs,
- * which upscaled packs make slow enough to stall a frame.
+ * One decoded catalog variant, kept so entering the same texture again copies it instead of re-reading
+ * and re-decoding its PNGs. Upscaled packs make that decode slow enough to show: the dungeon's quick
+ * character change re-enters the whole item icon sheet in a single frame.
  */
 struct CachedDecode {
     std::shared_ptr<const DecodedTexture> texture;   /**< Immutable decoded pixels shared with readers. */
@@ -94,9 +94,9 @@ struct TraceCounters {
     std::map<std::string, std::uint64_t, std::less<> > totals; /**< Counter totals sorted by name. */
 
     ~TraceCounters() {
-        const std::scoped_lock lock(mutex);
+        const std::lock_guard lock(mutex);
         for (const auto &[name, total] : totals) {
-            std::println(stderr, "texture-trace: {} = {}", name, static_cast<unsigned long long>(total));
+            std::fprintf(stderr, "texture-trace: %s = %llu\n", name.c_str(), static_cast<unsigned long long>(total));
         }
     }
 };
@@ -110,7 +110,7 @@ TraceCounters &Counters() {
 }
 
 void ClearDecodeCache() {
-    const std::scoped_lock lock(decode_mutex);
+    const std::lock_guard lock(decode_mutex);
     decode_cache.clear();
     decode_uses.clear();
     decode_cache_bytes = 0;
@@ -120,7 +120,7 @@ void ClearDecodeCache() {
  * Forgets every path memo so the next lookups observe the current pack configuration.
  */
 void ClearMemos() {
-    const std::scoped_lock lock(memo_mutex);
+    const std::lock_guard lock(memo_mutex);
     candidates_memo.clear();
     stamp_memo.clear();
 }
@@ -129,8 +129,8 @@ void ClearMemos() {
  * Returns a cached decode and marks it most recently used, or null when it is not cached.
  */
 std::shared_ptr<const DecodedTexture> CacheFind(const std::string &key) {
-    const std::scoped_lock lock(decode_mutex);
-    const auto             found = decode_cache.find(key);
+    const std::lock_guard lock(decode_mutex);
+    const auto            found = decode_cache.find(key);
     if (found == decode_cache.end()) {
         return nullptr;
     }
@@ -142,7 +142,7 @@ std::shared_ptr<const DecodedTexture> CacheFind(const std::string &key) {
  * Reports whether a decode is cached without changing its recency.
  */
 bool CacheContains(const std::string &key) {
-    const std::scoped_lock lock(decode_mutex);
+    const std::lock_guard lock(decode_mutex);
     return decode_cache.contains(key);
 }
 
@@ -165,8 +165,8 @@ void CacheInsert(const std::string &key, std::shared_ptr<const DecodedTexture> t
     if (bytes == 0) {
         return;
     }
-    std::uint64_t          evictions = 0;
-    const std::scoped_lock lock(decode_mutex);
+    std::uint64_t         evictions = 0;
+    const std::lock_guard lock(decode_mutex);
     if (const auto found = decode_cache.find(key); found != decode_cache.end()) {
         decode_uses.splice(decode_uses.begin(), decode_uses, found->second.use);
         return;
@@ -179,7 +179,7 @@ void CacheInsert(const std::string &key, std::shared_ptr<const DecodedTexture> t
         ++evictions;
     }
     decode_uses.push_front(key);
-    decode_cache.emplace(key, CachedDecode{.texture = std::move(texture), .bytes = bytes, .use = decode_uses.begin()});
+    decode_cache.emplace(key, CachedDecode{std::move(texture), bytes, decode_uses.begin()});
     decode_cache_bytes += bytes;
     Trace("decode cache inserts");
     if (evictions) {
@@ -195,7 +195,7 @@ std::string FileStamp(const vfs::Ref &file, const std::string &name) {
         return vfs::Stamp(file);
     }
     {
-        const std::scoped_lock lock(memo_mutex);
+        const std::lock_guard lock(memo_mutex);
         if (stamp_scopes) {
             if (const auto found = stamp_memo.find(name); found != stamp_memo.end()) {
                 Trace("stamp memo hits");
@@ -203,8 +203,8 @@ std::string FileStamp(const vfs::Ref &file, const std::string &name) {
             }
         }
     }
-    auto                   stamp = vfs::Stamp(file);
-    const std::scoped_lock lock(memo_mutex);
+    auto                  stamp = vfs::Stamp(file);
+    const std::lock_guard lock(memo_mutex);
     if (stamp_scopes) {
         Trace("stamp memo misses");
         stamp_memo.insert_or_assign(name, stamp);
@@ -217,7 +217,7 @@ std::string FileStamp(const vfs::Ref &file, const std::string &name) {
  */
 std::string Display(const std::filesystem::path &path) {
     const auto utf8 = path.generic_u8string();
-    return {utf8.begin(), utf8.end()};
+    return std::string(utf8.begin(), utf8.end());
 }
 
 /**
@@ -236,17 +236,18 @@ const std::vector<vfs::Ref> *Overrides(std::string_view relative) {
  */
 std::optional<Pack> OpenPack(const std::filesystem::path &directory, const std::filesystem::path &name) {
     std::error_code error;
-    const auto      path = directory / name;
-    if (vfs::FoldKey(Display(name)).ends_with(".zip") && std::filesystem::is_regular_file(path, error)) {
-        return Pack{.location = path, .mount = ArchiveMountOpen(path)};
+    auto            archive = directory / name;
+    if (vfs::FoldKey(Display(name)).ends_with(".zip") && std::filesystem::is_regular_file(archive, error)) {
+        return Pack{archive, ArchiveMountOpen(archive)};
     }
-    auto archive = path;
+    archive = directory / name;
     archive += ".zip";
     if (std::filesystem::is_regular_file(archive, error)) {
-        return Pack{.location = archive, .mount = ArchiveMountOpen(archive)};
+        return Pack{archive, ArchiveMountOpen(archive)};
     }
-    if (std::filesystem::is_directory(path, error)) {
-        return Pack{.location = path, .mount = vfs::OpenDirectory(path, true)};
+    const auto folder = directory / name;
+    if (std::filesystem::is_directory(folder, error)) {
+        return Pack{folder, vfs::OpenDirectory(folder, true)};
     }
     return std::nullopt;
 }
@@ -255,15 +256,7 @@ std::optional<Pack> OpenPack(const std::filesystem::path &directory, const std::
  * Reports a rejected configuration or asset with its path.
  */
 void Diagnostic(const std::filesystem::path &path, const std::string &message) {
-    std::println(stderr, "datapacks: {}: {}", Display(path), message);
-}
-
-/**
- * Reports whether a catalog entry is an RGBA texture within the accepted dimensions.
- */
-bool ValidRgbaEntry(const texture_catalog::Entry &entry) {
-    return entry.type == "texture" && entry.bpp == 32 && entry.width > 0 && entry.height > 0 &&
-           std::cmp_less_equal(entry.width, kMaxDimension) && std::cmp_less_equal(entry.height, kMaxDimension);
+    std::fprintf(stderr, "datapacks: %s: %s\n", Display(path).c_str(), message.c_str());
 }
 
 /**
@@ -291,15 +284,19 @@ bool ChainFits(uint32_t width, uint32_t height, std::size_t count) {
     return total <= kMaxDecodedBytes && total <= std::numeric_limits<std::size_t>::max();
 }
 
-} // namespace
-
-bool DecodePng(std::span<const uint8_t> bytes, uint32_t &width, uint32_t &height, std::vector<uint8_t> &rgba,
-               std::string &error) {
-    if (bytes.size() < 33) {
-        error = "expected a PNG image";
+/**
+ * Preflights PNG dimensions and file size before decoding any PNG format to RGBA.
+ */
+bool ReadPng(const vfs::Ref &path, uint32_t &width, uint32_t &height,
+             std::vector<uint8_t> &rgba, std::string &error) {
+    std::vector<uint8_t> bytes;
+    if (!ReadFileBytes(path, bytes, kMaxFileBytes) || bytes.size() < 33) {
+        error = "PNG is unreadable or exceeds the file-size limit";
         return false;
     }
-    const auto header = bytes.first<33>();
+    Trace("png files read");
+    Trace("png bytes read", bytes.size());
+    const std::span<const uint8_t, 33> header(bytes.data(), 33);
     constexpr std::array<unsigned char, 8> signature{137, 80, 78, 71, 13, 10, 26, 10};
     if (!std::equal(signature.begin(), signature.end(), header.begin()) ||
         header[8] || header[9] || header[10] || header[11] != 13 ||
@@ -318,48 +315,11 @@ bool DecodePng(std::span<const uint8_t> bytes, uint32_t &width, uint32_t &height
         error = "PNG dimensions exceed the texture or memory limit";
         return false;
     }
-    // The bridge's decoder inflates several times faster than stb_image; stb_image still reads what it rejects.
-    rgba.resize(static_cast<std::size_t>(width) * height * 4);
-    try {
-        kazarov::png_decode_rgba(rust::Slice<const uint8_t>(bytes.data(), bytes.size()), width, height,
-                                 rust::Slice<uint8_t>(rgba.data(), rgba.size()));
-        Trace("png decodes");
-        Trace("png decoded bytes", rgba.size());
-        return true;
-    } catch (const std::exception &) {
-        Trace("png bridge rejections");
-    }
-    int            decoded_width = 0;
-    int            decoded_height = 0;
-    int            channels = 0;
-    unsigned char *pixels = stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()),
-                                                  &decoded_width, &decoded_height, &channels, 4);
-    if (!pixels || std::cmp_not_equal(decoded_width, width) || std::cmp_not_equal(decoded_height, height)) {
-        stbi_image_free(pixels);
-        rgba.clear();
+    if (!DecodePngRgba(bytes, width, height, rgba)) {
         error = "cannot decode PNG";
         return false;
     }
-    std::copy_n(pixels, rgba.size(), rgba.begin());
-    stbi_image_free(pixels);
-    Trace("stbi decodes");
-    Trace("stbi decoded bytes", rgba.size());
     return true;
-}
-
-namespace {
-/**
- * Reads a PNG file within the file-size limit and decodes it to RGBA.
- */
-bool ReadPng(const vfs::Ref &path, uint32_t &width, uint32_t &height, std::vector<uint8_t> &rgba, std::string &error) {
-    std::vector<uint8_t> bytes;
-    if (!ReadFileBytes(path, bytes, kMaxFileBytes)) {
-        error = "PNG is unreadable or exceeds the file-size limit";
-        return false;
-    }
-    Trace("png files read");
-    Trace("png bytes read", bytes.size());
-    return DecodePng(bytes, width, height, rgba, error);
 }
 
 /**
@@ -382,9 +342,8 @@ std::vector<uint8_t> Pad(std::vector<uint8_t> pixels, uint32_t width, uint32_t h
  * Builds the next physical mip canvas with a two-by-two box filter.
  */
 std::vector<uint8_t> Downsample(const std::vector<uint8_t> &pixels, uint32_t width, uint32_t height) {
-    TraceTimer           timer("datapacks.downsample_us");
-    const uint32_t       next_width = std::max(1u, width / 2);
-    const uint32_t       next_height = std::max(1u, height / 2);
+    TraceTimer timer("datapacks.downsample_us");
+    const uint32_t       next_width = std::max(1u, width / 2), next_height = std::max(1u, height / 2);
     std::vector<uint8_t> next(static_cast<std::size_t>(next_width) * next_height * 4);
     for (uint32_t y = 0; y < next_height; ++y) {
         for (uint32_t x = 0; x < next_width; ++x) {
@@ -408,6 +367,9 @@ std::vector<uint8_t> Downsample(const std::vector<uint8_t> &pixels, uint32_t wid
 
 } // namespace
 
+/**
+ * Clears the base mount, all configured packs and the override index.
+ */
 void Clear() {
     ClearDecodeCache();
     ClearMemos();
@@ -529,7 +491,7 @@ std::vector<vfs::Ref> Candidates(const std::filesystem::path &relative) {
         return {};
     }
     {
-        const std::scoped_lock lock(memo_mutex);
+        const std::lock_guard lock(memo_mutex);
         if (const auto found = candidates_memo.find(*name); found != candidates_memo.end()) {
             Trace("candidates memo hits");
             return found->second;
@@ -543,7 +505,7 @@ std::vector<vfs::Ref> Candidates(const std::filesystem::path &relative) {
     if (auto original = vfs::Find(base, *name)) {
         candidates.push_back(std::move(original));
     }
-    const std::scoped_lock lock(memo_mutex);
+    const std::lock_guard lock(memo_mutex);
     candidates_memo.insert_or_assign(*name, candidates);
     return candidates;
 }
@@ -586,7 +548,7 @@ std::vector<std::filesystem::path> DirectoryMembers(const std::filesystem::path 
     for (const auto &[key, path] : members) {
         sorted.emplace_back(vfs::FoldKey(path), std::filesystem::path(std::u8string(path.begin(), path.end())));
     }
-    std::ranges::sort(sorted, {}, &std::pair<std::string, std::filesystem::path>::first);
+    std::sort(sorted.begin(), sorted.end(), [](const auto &left, const auto &right) { return left.first < right.first; });
     std::vector<std::filesystem::path> result;
     result.reserve(sorted.size());
     for (auto &[key, path] : sorted) {
@@ -629,7 +591,9 @@ std::string DecodeKey(const texture_catalog::Entry &entry, std::size_t variant_i
 bool DecodeUncached(const texture_catalog::Entry &entry, std::size_t variant_index, DecodedTexture &decoded,
                     std::string &error) {
     decoded = {};
-    if (!ValidRgbaEntry(entry) || variant_index >= entry.variants.size()) {
+    if (entry.type != "texture" || entry.bpp != 32 || entry.width <= 0 || entry.height <= 0 ||
+        entry.width > static_cast<int>(kMaxDimension) || entry.height > static_cast<int>(kMaxDimension) ||
+        variant_index >= entry.variants.size()) {
         error = "invalid texture entry or RGBA variant";
         return false;
     }
@@ -638,8 +602,7 @@ bool DecodeUncached(const texture_catalog::Entry &entry, std::size_t variant_ind
         error = "missing or invalid PNG mip chain";
         return false;
     }
-    const uint32_t retail_width = PowerOfTwo(entry.width);
-    const uint32_t retail_height = PowerOfTwo(entry.height);
+    const uint32_t retail_width = PowerOfTwo(entry.width), retail_height = PowerOfTwo(entry.height);
     decoded.width = retail_width;
     decoded.height = retail_height;
     if (variant.levels.empty()) {
@@ -651,8 +614,7 @@ bool DecodeUncached(const texture_catalog::Entry &entry, std::size_t variant_ind
     for (std::size_t mip = 0; mip < variant.levels.size(); ++mip) {
         bool selected = false;
         for (const auto &path : candidates(mip)) {
-            uint32_t             width = 0;
-            uint32_t             height = 0;
+            uint32_t             width = 0, height = 0;
             std::vector<uint8_t> pixels;
             std::string          reason;
             if (!ReadPng(path, width, height, pixels, reason)) {
@@ -704,17 +666,48 @@ bool DecodeUncached(const texture_catalog::Entry &entry, std::size_t variant_ind
  */
 bool Decode(const texture_catalog::Entry &entry, std::size_t variant_index, DecodedTexture &decoded,
             std::string &error) {
-    if (!ValidRgbaEntry(entry) || variant_index >= entry.variants.size() || entry.variants[variant_index].levels.empty()) {
+    if (entry.type != "texture" || entry.bpp != 32 || entry.width <= 0 || entry.height <= 0 ||
+        entry.width > static_cast<int>(kMaxDimension) || entry.height > static_cast<int>(kMaxDimension) ||
+        variant_index >= entry.variants.size() || entry.variants[variant_index].levels.empty()) {
         return DecodeUncached(entry, variant_index, decoded, error);
     }
     return DecodeCached(DecodeKey(entry, variant_index), [&](DecodedTexture &out, std::string &failure) { return DecodeUncached(entry, variant_index, out, failure); }, decoded, error);
+}
+
+bool DecodePngRgba(std::span<const std::uint8_t> png, std::uint32_t width, std::uint32_t height, std::vector<std::uint8_t> &rgba) {
+    // The Rust decoder inflates several times faster than stb_image, which matters for upscaled packs; stb_image
+    // still reads whatever it rejects.
+    rgba.resize(static_cast<std::size_t>(width) * height * 4);
+    try {
+        kazarov::png_decode_rgba(rust::Slice<const std::uint8_t>(png.data(), png.size()), width, height,
+                                 rust::Slice<std::uint8_t>(rgba.data(), rgba.size()));
+        Trace("png fast decodes");
+        Trace("stbi decoded bytes", rgba.size());
+        return true;
+    } catch (const std::exception &) {
+    }
+    int            decoded_width = 0, decoded_height = 0, channels = 0;
+    unsigned char *pixels = stbi_load_from_memory(png.data(), static_cast<int>(png.size()), &decoded_width,
+                                                  &decoded_height, &channels, 4);
+    if (!pixels || decoded_width != static_cast<int>(width) || decoded_height != static_cast<int>(height)) {
+        stbi_image_free(pixels);
+        rgba.clear();
+        return false;
+    }
+    std::copy_n(pixels, rgba.size(), rgba.begin());
+    stbi_image_free(pixels);
+    Trace("stbi decodes");
+    Trace("stbi decoded bytes", rgba.size());
+    return true;
 }
 
 std::string DecodeIdentity(const texture_catalog::Entry &entry, std::size_t variant) {
     if (entry.no_image) {
         return "no image";
     }
-    if (!ValidRgbaEntry(entry) || variant >= entry.variants.size() || entry.variants[variant].levels.empty()) {
+    if (entry.type != "texture" || entry.bpp != 32 || entry.width <= 0 || entry.height <= 0 ||
+        entry.width > static_cast<int>(kMaxDimension) || entry.height > static_cast<int>(kMaxDimension) ||
+        variant >= entry.variants.size() || entry.variants[variant].levels.empty()) {
         return {};
     }
     return DecodeKey(entry, variant);
@@ -723,14 +716,15 @@ std::string DecodeIdentity(const texture_catalog::Entry &entry, std::size_t vari
 void PrefetchEntries(std::span<const texture_catalog::Entry *const> entries) {
     std::vector<DecodeJob> jobs;
     for (const auto *entry : entries) {
-        if (entry->no_image || !ValidRgbaEntry(*entry)) {
+        if (entry->type != "texture" || entry->bpp != 32 || entry->no_image || entry->width <= 0 || entry->height <= 0 ||
+            entry->width > static_cast<int>(kMaxDimension) || entry->height > static_cast<int>(kMaxDimension)) {
             continue;
         }
         for (std::size_t variant = 0; variant < entry->variants.size(); ++variant) {
             if (entry->variants[variant].levels.empty()) {
                 continue;
             }
-            jobs.push_back({.identity = DecodeKey(*entry, variant), .decoder = [entry, variant](DecodedTexture &out, std::string &failure) {
+            jobs.push_back({DecodeKey(*entry, variant), [entry, variant](DecodedTexture &out, std::string &failure) {
                                 return DecodeUncached(*entry, variant, out, failure);
                             }});
         }
@@ -807,7 +801,7 @@ bool ReadFileBytes(const std::filesystem::path &path, std::vector<uint8_t> &byte
         return false;
     }
     const auto end = static_cast<std::streamoff>(file.tellg());
-    if (end < 0 || std::cmp_greater(end, max_bytes) ||
+    if (end < 0 || static_cast<std::uint64_t>(end) > max_bytes ||
         static_cast<std::uint64_t>(end) > std::numeric_limits<std::size_t>::max()) {
         return false;
     }
@@ -858,7 +852,7 @@ void Prefetch(std::span<DecodeJob> jobs) {
             try {
                 succeeded = job.decoder(fresh, error);
             } catch (...) {
-                // Not cached; a later DecodeCached call reruns it and reports the error.
+                succeeded = false;
             }
             if (succeeded) {
                 CacheInsert(job.identity, std::make_shared<const DecodedTexture>(std::move(fresh)));
@@ -880,12 +874,12 @@ void Prefetch(std::span<DecodeJob> jobs) {
 }
 
 StampScope::StampScope() {
-    const std::scoped_lock lock(memo_mutex);
+    const std::lock_guard lock(memo_mutex);
     ++stamp_scopes;
 }
 
 StampScope::~StampScope() {
-    const std::scoped_lock lock(memo_mutex);
+    const std::lock_guard lock(memo_mutex);
     if (--stamp_scopes == 0) {
         stamp_memo.clear();
     }
@@ -903,8 +897,8 @@ void Trace(std::string_view counter, std::uint64_t value) {
     if (!Tracing()) {
         return;
     }
-    auto                  &counters = Counters();
-    const std::scoped_lock lock(counters.mutex);
+    auto                 &counters = Counters();
+    const std::lock_guard lock(counters.mutex);
     if (const auto found = counters.totals.find(counter); found != counters.totals.end()) {
         found->second += value;
     } else {

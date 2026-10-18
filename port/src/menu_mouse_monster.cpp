@@ -41,10 +41,10 @@ void BadgeMouse(CMenuMosSelect &box) {
 }
 
 void ClassMouse() {
-    const int     count = std::clamp(BuildUpWeaponInfo.select_num, 0, 3);
+    const int     count = std::clamp(int(BuildUpWeaponInfo.select_num), 0, 3);
     MenuMouseRect rows[3]{};
     for (int i = 0; i < count; ++i) {
-        rows[i] = {.x = static_cast<float>(BuildUpNameXY[i][0]), .y = static_cast<float>(BuildUpNameXY[i][1]), .w = 200, .h = 24};
+        rows[i] = {float(BuildUpNameXY[i][0]), float(BuildUpNameXY[i][1]), 200, 24};
     }
     const int selected = MenuMouseRows({rows, static_cast<std::size_t>(count)}, BuildUpWeaponInfo.select_no);
     if (selected != BuildUpWeaponInfo.select_no) {
@@ -58,7 +58,7 @@ MenuMouseRect MenuMouseBadgeCell(const MenuMouseRect &badge) {
     if (badge.w <= 0 || badge.h <= 0) {
         return {};
     }
-    return {.x = badge.x - 1, .y = badge.y - 1, .w = badge.w + 2, .h = badge.h + 2};
+    return {badge.x - 1, badge.y - 1, badge.w + 2, badge.h + 2};
 }
 
 void MenuMouseMonsterTick(CMenuKeyFunc &keys) {

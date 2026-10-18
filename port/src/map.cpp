@@ -1,10 +1,7 @@
 #include "common.h"
 
-#include <algorithm>
-#include <span>
-#include <string_view>
+#include <cstring>
 
-#include "bounded_text.hpp"
 #include "map.hpp"
 #include "map_port.hpp"
 #include "mapload.hpp"
@@ -21,25 +18,34 @@ PORT_OVERRIDE void CMap::SetPlacePartsBuff(mgCMemory *memory, int capacity) {
 }
 
 namespace {
+struct TreasureFlagFix {
+    const char *map_name;
+    const char *point_name;
+    int         retail_flag;
+    int         fixed_flag;
+};
 
-// Starlight Temple's item19 and item11 chests share opened flag 7, so opening one hides the other. No other chest of
-// the town uses flag 9.
-constexpr std::string_view kSharedFlagMap = "f02";
-constexpr std::string_view kSharedFlagPoint = "item11";
-constexpr int              kSharedFlag = 7;
-constexpr int              kSeparateFlag = 9;
-
+// Retail gives Starlight Temple's item19 and item11 the same opened flag, so opening one hides the other (issue #25).
+// No other chest of f02 uses flag 9.
+constexpr TreasureFlagFix kTreasureFlagFixes[] = {
+    {"f02", "item11", 7, 9},
+};
 } // namespace
 
-void PortSplitTreasureBoxFlags(CMap &map, std::string_view map_name) {
-    if (map_name != kSharedFlagMap || map.tr_box == nullptr) {
+void PortSplitTreasureBoxFlags(CMap *map, const char *map_name) {
+    if (map == nullptr || map_name == nullptr) {
         return;
     }
-
-    for (CMapTreasureBox &box : std::span(map.tr_box, static_cast<std::size_t>(std::max(map.tr_box_num, 0)))) {
-        if (box.flag_no == kSharedFlag && box.func_point != nullptr &&
-            bounded_text::View(box.func_point->name) == kSharedFlagPoint) {
-            box.flag_no = kSeparateFlag;
+    for (const auto &fix : kTreasureFlagFixes) {
+        if (std::strcmp(fix.map_name, map_name) != 0) {
+            continue;
+        }
+        CMapTreasureBox *box = map->tr_box;
+        for (int i = 0; box != nullptr && i < map->tr_box_num; i++, box++) {
+            const char *point = box->func_point != nullptr ? box->func_point->name : nullptr;
+            if (box->flag_no == fix.retail_flag && point != nullptr && std::strcmp(point, fix.point_name) == 0) {
+                box->flag_no = fix.fixed_flag;
+            }
         }
     }
 }

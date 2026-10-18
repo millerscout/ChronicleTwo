@@ -25,9 +25,9 @@ extern CSaveMenuClass *MouseSave asm("MenuMouse_Save");
 
 namespace {
 constexpr MenuMouseRect rows[] = {
-    {.x = 20, .y = 40,  .w = 100, .h = 30},
-    {.x = 20, .y = 80,  .w = 100, .h = 30},
-    {.x = 20, .y = 120, .w = 100, .h = 30}
+    {20, 40,  100, 30},
+    {20, 80,  100, 30},
+    {20, 120, 100, 30}
 };
 
 TEST(MenuMouse, HitBoxesExcludeGapsAndTheirFarEdges) {
@@ -76,8 +76,7 @@ TEST(MenuMouse, WindowPixelsFollowUiScalingAndHighDpiMapping) {
 }
 
 TEST(MenuMouse, HoverUsesTheRetailMoveResultAndScrollUpdate) {
-    int cursor = 0;
-    int scroll = 0;
+    int cursor = 0, scroll = 0;
     MenuMouseMove(&cursor, 8);
     EXPECT_EQ(cursor, 0);
     EXPECT_EQ(MenuKeySelectCheck(0, &cursor, &scroll, 0, 13, 3, MENU_CURSOR_LIMIT_CLAMP), MENU_CURSOR_MOVED);
@@ -160,8 +159,8 @@ TEST_F(MenuMouseInput, OutsideClickIsRejectedButRightClickCancels) {
 
 TEST_F(MenuMouseInput, MessageClickMovesTheRetailDirectionBeforeItConfirms) {
     const MenuMouseRect choices[] = {
-        {.x = 20,  .y = 200, .w = 70,  .h = 50},
-        {.x = 200, .y = 200, .w = 100, .h = 60}
+        {20,  200, 70,  50},
+        {200, 200, 100, 60}
     };
     MenuMouseEnable(true);
     MenuMouseNoteChoices(this, 42, choices, 0, true);
@@ -184,8 +183,8 @@ TEST_F(MenuMouseInput, MessageClickMovesTheRetailDirectionBeforeItConfirms) {
 
 TEST_F(MenuMouseInput, NewMessageDiscardsThePreviousPendingClick) {
     const MenuMouseRect choices[] = {
-        {.x = 20,  .y = 200, .w = 70,  .h = 50},
-        {.x = 200, .y = 200, .w = 100, .h = 60}
+        {20,  200, 70,  50},
+        {200, 200, 100, 60}
     };
     MenuMouseEnable(true);
     MenuMouseNoteChoices(this, 42, choices, 0, true);
@@ -214,8 +213,8 @@ TEST_F(MenuMouseInput, MenuCloseKeepsHeldClickAwayFromGameplayUntilRelease) {
 
 TEST_F(MenuMouseInput, ControllerHandoffDiscardsThePreviousMouseChoiceTarget) {
     const MenuMouseRect choices[] = {
-        {.x = 200, .y = 200, .w = 100, .h = 60},
-        {.x = 20,  .y = 200, .w = 70,  .h = 50}
+        {200, 200, 100, 60},
+        {20,  200, 70,  50}
     };
     MenuMouseEnable(true);
     MenuMouseNoteChoices(this, 42, choices, 1, true);
@@ -237,8 +236,8 @@ TEST_F(MenuMouseInput, ControllerHandoffDiscardsThePreviousMouseChoiceTarget) {
 
 TEST_F(MenuMouseInput, ListClickWaitsForTheRetailCursorThenConfirmsOnce) {
     const MenuMouseRect list[] = {
-        {.x = 200, .y = 200, .w = 100, .h = 60},
-        {.x = 300, .y = 200, .w = 100, .h = 60}
+        {200, 200, 100, 60},
+        {300, 200, 100, 60}
     };
     MenuMouseEnable(true);
     InputSetScriptedDevices({.mouse_buttons = 1});
@@ -256,8 +255,8 @@ TEST_F(MenuMouseInput, ListClickWaitsForTheRetailCursorThenConfirmsOnce) {
 
 TEST_F(MenuMouseInput, ListClickCannotCarryIntoAnotherPageOrSurviveCancel) {
     const MenuMouseRect list[] = {
-        {.x = 200, .y = 200, .w = 100, .h = 60},
-        {.x = 300, .y = 200, .w = 100, .h = 60}
+        {200, 200, 100, 60},
+        {300, 200, 100, 60}
     };
     MenuMouseEnable(true);
     InputSetScriptedDevices({.mouse_buttons = 1});
@@ -322,7 +321,7 @@ TEST_F(MenuMouseInput, LoadListUsesScrolledFormGeometryAndRetailCursorTransition
     const auto catalog = SaveSlots;
     SaveSlots.saves.resize(20);
     CSaveMenuClass   save;
-    CMenuPosDataForm form{};
+    CMenuPosDataForm form;
     form.x = 30;
     form.y = 190 - 80 * 10;
     save.list_form = &form;
@@ -376,7 +375,7 @@ TEST_F(MenuMouseInput, FlatSaveWheelReachesOnlyTheSingleNewRowBeyondRetailCapaci
     const auto catalog = SaveSlots;
     SaveSlots.saves.resize(20);
     CSaveMenuClass   save;
-    CMenuPosDataForm form{};
+    CMenuPosDataForm form;
     form.x = 30;
     form.y = 164 - 80 * 18;
     save.list_form = &form;
@@ -584,8 +583,8 @@ TEST_F(MenuMouseInput, MultipleHandsKeepDistinctReplacementKeys) {
     InputSetScriptedDevices({.mouse_dx = 1});
     MenuMouseTake();
     gfx::TextureBinding texture{.texture = 123};
-    const auto          first = MenuMouseNoteHand(texture, {.x = 0, .y = 0, .w = 40, .h = 24});
-    const auto          second = MenuMouseNoteHand(texture, {.x = 0, .y = 0, .w = 40, .h = 24});
+    const auto          first = MenuMouseNoteHand(texture, {0, 0, 40, 24});
+    const auto          second = MenuMouseNoteHand(texture, {0, 0, 40, 24});
     EXPECT_NE(first, second);
     EXPECT_EQ(MenuMouseReplacedHandKey(), second);
 }
@@ -675,8 +674,7 @@ TEST_F(MenuMouseInput, RetailOptionsHoverMovesRowAndButtonAndTheWheelScrolls) {
 TEST_F(MenuMouseInput, RetailOptionsHitOnlyDrawnRowsInsideTheListWhileItEases) {
     MenuMouseEnable(true);
     CMenuOption        menu;
-    CMenuPosDataForm   form{};
-    CMenuPosDataForm   clip{};
+    CMenuPosDataForm   form{}, clip{};
     MENUFORMPARTS_TYPE buttons[OPTION_ITEM_MAX][2]{};
     form.draw_flag = true;
     form.x = 40;
@@ -757,9 +755,7 @@ TEST_F(MenuMouseInput, CharacterPortraitsSelectOnHoverAndOnlyAPortraitClickConfi
 
 TEST(MenuMouse, CharacterPageStatesChooseWhatTheMouseDrives) {
     using enum MenuMouseCharaInput;
-    constexpr int none = MENU_ASK_MODE_NONE;
-    constexpr int box = CHR_CNG_SUB_MENU_MONSTER_BOX;
-    constexpr int own = CHR_CNG_SUB_MENU_NONE;
+    constexpr int none = MENU_ASK_MODE_NONE, box = CHR_CNG_SUB_MENU_MONSTER_BOX, own = CHR_CNG_SUB_MENU_NONE;
     EXPECT_EQ(MenuMouseCharaInputFor(none, own, CHR_CNG_PAGE_SELECT, CHR_CNG_STEP_SELECT, 0, 0), Portraits);
     EXPECT_EQ(MenuMouseCharaInputFor(none, own, CHR_CNG_PAGE_SELECT, CHR_CNG_STEP_SELECT, CHR_CNG_PHASE_LOAD, 0), Locked);
     // The opening wait and the townsperson's questions keep the retail any-button and message choices.
@@ -779,13 +775,11 @@ TEST_F(MenuMouseInput, RepairBoardSelectsItemsScrollsAndRejectsBackgroundClicks)
     board.draw_flag = true;
     board.x = 200;
     board.y = 30;
-    const float old_x = MenuItemBrdUnderBrdPosXY[0];
-    const float old_y = MenuItemBrdUnderBrdPosXY[1];
+    const float old_x = MenuItemBrdUnderBrdPosXY[0], old_y = MenuItemBrdUnderBrdPosXY[1];
     // Slots are 40 by 50 from 216,56, six to a row, so the initial pointer (256,240) is slot 19.
     MenuItemBrdUnderBrdPosXY[0] = 216;
     MenuItemBrdUnderBrdPosXY[1] = 56;
-    int select = 0;
-    int top = 0;
+    int select = 0, top = 0;
     InputSetScriptedDevices({.mouse_dx = 1});
     MenuMouseRepairBoard(&board, select, top, 60);
     EXPECT_EQ(select, 19);
@@ -816,8 +810,7 @@ TEST_F(MenuMouseInput, RepairBoardSelectsItemsScrollsAndRejectsBackgroundClicks)
 TEST_F(MenuMouseInput, HelpEntriesFollowHoverScrollAndTurnPicturePages) {
     MenuMouseEnable(true);
     CManualMenu        menu;
-    CMenuPosDataForm   background{};
-    CMenuPosDataForm   clip{};
+    CMenuPosDataForm   background{}, clip{};
     MENUFORMPARTS_TYPE places[2]{};
     Place(places[0], "base_msg", 60, 100, 0, 0);
     Place(places[1], "scrlbase", 400, 100, 0, 0);
@@ -880,12 +873,12 @@ TEST_F(MenuMouseInput, HelpEntriesFollowHoverScrollAndTurnPicturePages) {
 
 TEST_F(MenuMouseInput, NewestChoiceWindowTakesTheClickOverAListStillDrawingItsCursor) {
     const MenuMouseRect commands[] = {
-        {.x = 20, .y = 300, .w = 100, .h = 20},
-        {.x = 20, .y = 320, .w = 100, .h = 20}
+        {20, 300, 100, 20},
+        {20, 320, 100, 20}
     };
     const MenuMouseRect question[] = {
-        {.x = 200, .y = 220, .w = 100, .h = 30},
-        {.x = 200, .y = 250, .w = 100, .h = 30}
+        {200, 220, 100, 30},
+        {200, 250, 100, 30}
     };
     MenuMouseEnable(true);
     MenuMouseNoteChoices(this, 31, commands, 0, false);
@@ -918,13 +911,13 @@ int DrawCommandsAndQuestion(const void *commands, const void *question, std::spa
 }
 
 constexpr MenuMouseRect kCommandRows[] = {
-    {.x = 20, .y = 300, .w = 100, .h = 30},
-    {.x = 20, .y = 330, .w = 100, .h = 30}
+    {20, 300, 100, 30},
+    {20, 330, 100, 30}
 };
 // The initial pointer, 256,240, is on the question's second choice.
 constexpr MenuMouseRect kQuestionRows[] = {
-    {.x = 100, .y = 220, .w = 100, .h = 30},
-    {.x = 220, .y = 220, .w = 100, .h = 30}
+    {100, 220, 100, 30},
+    {220, 220, 100, 30}
 };
 } // namespace
 
@@ -1011,12 +1004,10 @@ TEST_F(MenuMouseInput, RepairBoardOwnsClicksWhileCedricsCommandsStillDraw) {
     board.draw_flag = true;
     board.x = 200;
     board.y = 30;
-    const float old_x = MenuItemBrdUnderBrdPosXY[0];
-    const float old_y = MenuItemBrdUnderBrdPosXY[1];
+    const float old_x = MenuItemBrdUnderBrdPosXY[0], old_y = MenuItemBrdUnderBrdPosXY[1];
     MenuItemBrdUnderBrdPosXY[0] = 216;
     MenuItemBrdUnderBrdPosXY[1] = 56;
-    int select = 0;
-    int top = 0;
+    int select = 0, top = 0;
     for (int i = 0; i < 10; ++i) {
         MenuMouseNoteChoices(this, 31, kCommandRows, 0, false);
         InputSetScriptedDevices({});
@@ -1049,7 +1040,7 @@ TEST_F(MenuMouseInput, RepairBoardOwnsClicksWhileCedricsCommandsStillDraw) {
 
 TEST_F(MenuMouseInput, RepairBoardInputLeavesNoTargetForCedricsCommandsAfterItCloses) {
     // Board clicks on a command behind it, or wheel notches, then right click closes the board.
-    for (const InputKeyboardMouse &board_input : {
+    for (const InputKeyboardMouse board_input : {
              InputKeyboardMouse{.mouse_buttons = 1, .mouse_dx = -200, .mouse_dy = 100},
              InputKeyboardMouse{.mouse_wheel = -1}
     }) {
@@ -1061,12 +1052,10 @@ TEST_F(MenuMouseInput, RepairBoardInputLeavesNoTargetForCedricsCommandsAfterItCl
         board.draw_flag = true;
         board.x = 200;
         board.y = 30;
-        const float old_x = MenuItemBrdUnderBrdPosXY[0];
-        const float old_y = MenuItemBrdUnderBrdPosXY[1];
+        const float old_x = MenuItemBrdUnderBrdPosXY[0], old_y = MenuItemBrdUnderBrdPosXY[1];
         MenuItemBrdUnderBrdPosXY[0] = 216;
         MenuItemBrdUnderBrdPosXY[1] = 56;
-        int select = 0;
-        int top = 0;
+        int select = 0, top = 0;
         for (int i = 0; i < 10; ++i) {
             MenuMouseNoteChoices(this, 31, kCommandRows, 0, false);
             InputSetScriptedDevices({});
