@@ -46,20 +46,12 @@ struct SetupPartStack {
 // Retail budgets were counted at PS2 pointer widths; SetActionScript's stack and call allocations grow on PC. Zero on PS2.
 #define CHARA_SCRIPT_RUNTIME_DELTA (((sizeof(RS_STACKDATA) - 8) * 0x80 + (sizeof(RS_CALLDATA) - 12) * 0x200) / 16)
 
+// Retail sized the model stacks at PS2 pointer widths too; LoadPack's model structures grow on PC, and Max's
+// dungeon model already fills 68492 of 68500, so a reload after an event overflows. Zero on PS2.
 #ifdef PORT
-#include "port_memory_budget.hpp"
-
-static constexpr int CharaMemModelDelta(int row, int col) {
-    if ((row == CHARA_MEM_LAYOUT_HUMAN && col <= 1) || (row == CHARA_MEM_LAYOUT_ROBO && col <= 2) ||
-        (row == CHARA_MEM_LAYOUT_EDIT && col == 0) || (row == CHARA_MEM_LAYOUT_MONSTER && col == 0)) {
-        return CHARA_MODEL_LOAD_DELTA;
-    }
-    return 0;
-}
-
-#define MEM_TBL(v, row, col) ((v) + CharaMemModelDelta(row, col))
+#define CHARA_MODEL_RUNTIME_DELTA 32768
 #else
-#define MEM_TBL(v, row, col) (v)
+#define CHARA_MODEL_RUNTIME_DELTA 0
 #endif
 
 /**
@@ -68,12 +60,10 @@ static constexpr int CharaMemModelDelta(int row, int col) {
  *
  */
 static int mem_table[CHARA_MEM_LAYOUT_NUM][CHARA_MEM_STACK_NUM] = {
-    {MEM_TBL(68500, CHARA_MEM_LAYOUT_HUMAN, 0),   MEM_TBL(40000, CHARA_MEM_LAYOUT_HUMAN, 1),   7000,  4650,  3000,
-     9900 + CHARA_SCRIPT_RUNTIME_DELTA,            4500 + CHARA_SCRIPT_RUNTIME_DELTA},
-    {MEM_TBL(30000, CHARA_MEM_LAYOUT_ROBO, 0),    MEM_TBL(30000, CHARA_MEM_LAYOUT_ROBO, 1),    MEM_TBL(60000, CHARA_MEM_LAYOUT_ROBO, 2), 10000,
-     10000 + CHARA_SCRIPT_RUNTIME_DELTA,          0,                                             0},
-    {MEM_TBL(75000, CHARA_MEM_LAYOUT_EDIT, 0),    40000,                                         7000,  4650,  3000,  9900, 0},
-    {MEM_TBL(120000, CHARA_MEM_LAYOUT_MONSTER, 0), 0,                                             0,     0,     0,     5500, 0}
+    {68500 + CHARA_MODEL_RUNTIME_DELTA,  40000, 7000,  4650,  3000,  9900 + CHARA_SCRIPT_RUNTIME_DELTA, 4500 + CHARA_SCRIPT_RUNTIME_DELTA},
+    {30000,  30000, 60000, 10000, 10000 + CHARA_SCRIPT_RUNTIME_DELTA, 0,    0   },
+    {75000 + CHARA_MODEL_RUNTIME_DELTA,  40000, 7000,  4650,  3000,  9900, 0   },
+    {120000 + CHARA_MODEL_RUNTIME_DELTA, 0,     0,     0,     0,     5500, 0   }
 };
 
 #ifdef PORT
