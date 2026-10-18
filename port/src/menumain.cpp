@@ -11,6 +11,7 @@
 #include "menumain.hpp"
 #include "mg_texture_port.hpp"
 #include "mglib.hpp"
+#include "platform/breadcrumbs.hpp"
 #include "platform/texture_catalog.hpp"
 #include "stubs/menumain.hpp"
 #include "texture_source.hpp"
@@ -78,6 +79,7 @@ PORT_OVERRIDE void MenuBaseTextureReEnter() {
 }
 
 PORT_OVERRIDE int MenuMainInit(MENU_INIT_ARG *arg) {
+    BreadcrumbSet(Crumb::Menu, "main menu");
     if (menuworld::HoldMenuInit(arg)) {
         return true;
     }
@@ -85,6 +87,7 @@ PORT_OVERRIDE int MenuMainInit(MENU_INIT_ARG *arg) {
 }
 
 PORT_OVERRIDE int MenuMainExit() {
+    BreadcrumbSet(Crumb::Menu, "");
     menuworld::MenuClosed();
     return PortRetailMenuMainExit();
 }

@@ -28,6 +28,7 @@
 #include "mg_texture.hpp"
 #include "mglib.hpp"
 #include "platform/arena.hpp"
+#include "platform/log.hpp"
 #include "platform/model_assets.hpp"
 #include "prespr.hpp"
 #include "quick_loadout.hpp"
@@ -140,7 +141,7 @@ void PortPrepareMenuCharacterArena(mgCMemory &memory, const void *model, const c
     // Equipped melee weapons reserve the native twelve-point, eight-subdivision sword trail.
     const std::size_t trail = part == 2 ? (sizeof(CSWordAfterEffect) + 15) / 16 + 2 + 2 * (12 + 1) + 2 * (12 * (8 + 2) + 1) : 0;
     if (!path || !menu_character::PrepareArena(memory, *path, profile ? profile : "", error, trail)) {
-        std::println(stderr, "menu character {}: {}", path ? path->c_str() : "unknown asset", path ? error.c_str() : "actual glTF filename required");
+        CT_LOG_WARN("menu character", "{}: {}", path ? path->c_str() : "unknown asset", path ? error.c_str() : "actual glTF filename required");
         std::exit(1);
     }
 }
@@ -169,7 +170,7 @@ PORT_OVERRIDE void MenuMemoryAdjust(mgCMemory *pool, mgCMemory *rest, mgCMemory 
     }
     const int remaining = pool->stack_size - pool->stack_used;
     if (partitions > remaining) {
-        std::println(stderr, "menu character partitions exceed aligned pool: {} of {} blocks",
+        CT_LOG_WARN("menu character partitions exceed aligned pool", "{} of {} blocks",
                      partitions, remaining);
         std::abort();
     }
@@ -237,7 +238,7 @@ PORT_OVERRIDE int KeyMainCharaBG() {
         }
     }
 
-    std::println(stderr, "quick change: not finished after {} steps, continuing frame by frame", kQuickChangeMaxSteps);
+    CT_LOG_WARN("quick change", "not finished after {} steps, continuing frame by frame", kQuickChangeMaxSteps);
     quick_change_pending = false;
     return 0;
 }
@@ -461,7 +462,7 @@ void PortFinishQuickChange() {
     }
 
     const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started);
-    std::println(stderr, "quick change: {}, {:.1f} ms", dungeon ? "dungeon" : "town", static_cast<double>(elapsed.count()) / 1000.0);
+    CT_LOG_INFO("quick change", "{}, {:.1f} ms", dungeon ? "dungeon" : "town", static_cast<double>(elapsed.count()) / 1000.0);
 }
 
 // Starts on the first game frame after the menu closes. Instead of Dark Cloud's ambient pulse and ceffe_s model,

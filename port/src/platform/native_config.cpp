@@ -1,3 +1,4 @@
+#include "platform/log.hpp"
 #include "platform/native_config.hpp"
 
 #include <sifdev.h>
@@ -179,7 +180,7 @@ void CheckKind(const Json &document, std::string_view kind) {
 }
 
 void Report(std::string_view path, std::string_view error) {
-    std::println(stderr, "config: {:.{}}: {:.{}}", path.data(), static_cast<int>(path.size()), error.data(), static_cast<int>(error.size()));
+    CT_LOG_WARN("config", "{:.{}}: {:.{}}", path.data(), static_cast<int>(path.size()), error.data(), static_cast<int>(error.size()));
 }
 
 const Json &At(const Json &object, const char *key) {

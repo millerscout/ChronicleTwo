@@ -22,6 +22,7 @@
 #include "mg_texture_port.hpp"
 #include "mglib.hpp"
 #include "platform/datapacks.hpp"
+#include "platform/log.hpp"
 #include "platform/model_assets.hpp"
 #include "script_timing.hpp"
 
@@ -240,7 +241,7 @@ int BuildNativeEffect(CEffectScriptMan &manager, int base_no, const EffectResour
             model_assets::CharacterLoadOptions options{.model_memory = memory, .motion_memory = memory, .image_memory = memory, .textures = &mgTexManager, .parent = nullptr, .texture_block = block, .outline = false};
             std::string                        error;
             if (!model_assets::LoadCharacter(*base->chara, resource.model, "info", options, error)) {
-                std::println(stderr, "effect model: {}", error);
+                CT_LOG_WARN("effect model", "{}", error);
                 return -1;
             }
             owns_block = requested_block < 0;
@@ -259,7 +260,7 @@ int BuildNativeEffect(CEffectScriptMan &manager, int base_no, const EffectResour
                 std::string error;
                 loaded = model_assets::LoadTextureSet(resource.bundle, *resource.texture_set, mgTexManager, block, *memory, error);
                 if (!loaded) {
-                    std::println(stderr, "effect texture: {}", error);
+                    CT_LOG_WARN("effect texture", "{}", error);
                 }
             } else if (!resource.texture.empty()) {
                 MgTextureEnterDocument(&mgTexManager, resource.texture, block, memory, nullptr);

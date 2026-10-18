@@ -15,6 +15,7 @@
 #include "dataread.hpp"
 #include "dataread_port.hpp"
 #include "mg_memory.hpp"
+#include "platform/log.hpp"
 #include "snd_mngr.hpp"
 #include "snd_seseq.hpp"
 #include "sound.hpp"
@@ -298,7 +299,7 @@ unsigned SoundLoadBundleData(int port_no, std::span<const std::byte> bytes, mgCM
         info->LoadVolInfoTxt(bank_no, const_cast<char *>(volume.data()), static_cast<int>(volume.size()));
         return ((port_no & 255) << 24) | ((bank_no & 255) << 16);
     } catch (const std::exception &error) {
-        std::println(stderr, "sound bundle: {}", error.what());
+        CT_LOG_WARN("sound bundle", "{}", error.what());
         return -1;
     }
 }
@@ -371,7 +372,7 @@ PORT_OVERRIDE void sndPortInfo::LoadSeInfoTxt(int bank_no, char *source, int siz
         } catch (const nlohmann::json::exception &) {
         }
     }
-    std::println(stderr, "sound: missing or invalid sound config JSON");
+    CT_LOG_WARN("sound", "missing or invalid sound config JSON");
 }
 
 PORT_OVERRIDE void sndPortInfo::LoadVolInfoTxt(int bank_no, char *source, int size) {
@@ -410,5 +411,5 @@ PORT_OVERRIDE void sndPortInfo::LoadVolInfoTxt(int bank_no, char *source, int si
         } catch (const nlohmann::json::exception &) {
         }
     }
-    std::println(stderr, "sound: missing or invalid volume JSON");
+    CT_LOG_WARN("sound", "missing or invalid volume JSON");
 }

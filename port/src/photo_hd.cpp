@@ -11,6 +11,7 @@
 
 #include "gfx/gfx.hpp"
 #include "platform/imagefile.hpp"
+#include "platform/log.hpp"
 #include "platform/paths.hpp"
 
 namespace {
@@ -47,7 +48,7 @@ void PhotoHdRemember(const uint8_t *image16, size_t bytes, std::vector<uint8_t> 
     std::error_code error;
     std::filesystem::create_directories(path.parent_path(), error);
     if (!gfx::WritePng(path, rgba.data(), kPhotoHdSize, kPhotoHdSize)) {
-        std::println(stderr, "photo: could not write {}", path.string());
+        CT_LOG_WARN("photo", "could not write {}", path.string());
     }
     missing.erase(hash);
     photos[hash] = std::move(rgba);

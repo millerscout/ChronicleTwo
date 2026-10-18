@@ -10,6 +10,7 @@
 #include "mainloop.hpp"
 #include "mglib.hpp"
 #include "monster.hpp"
+#include "platform/log.hpp"
 #include "port_monster_limit.hpp"
 #include "scenesnd.hpp"
 
@@ -95,14 +96,14 @@ void GameBenchTrySpawnEnemies(int loop_mode) {
     const int cap = PortMonsterActiveLimit();
     const int count = std::min(g_requested, cap);
     if (g_requested > cap) {
-        std::fprintf(stderr,
-                     "bench: --bench-spawn-enemies %d capped to %d (active monster limit); "
-                     "enable Expanded dungeon monsters in PC settings for 60\n",
-                     g_requested, cap);
+        CT_LOG_WARN("bench",
+                    "--bench-spawn-enemies {} capped to {} (active monster limit); "
+                    "enable Expanded dungeon monsters in PC settings for 60",
+                    g_requested, cap);
     }
 
     if (!PrepareMonsterType(g_monster_id)) {
-        std::fprintf(stderr, "bench: could not load monster id %d for spawn\n", g_monster_id);
+        CT_LOG_WARN("bench", "could not load monster id {} for spawn", g_monster_id);
         g_done = true;
         return;
     }
@@ -118,6 +119,6 @@ void GameBenchTrySpawnEnemies(int loop_mode) {
         SpawnOne(refer, dx, dz);
     }
 
-    std::fprintf(stderr, "bench: spawned %d monsters (id %d) in a tight grid near the player\n", count, g_monster_id);
+    CT_LOG_INFO("bench", "spawned {} monsters (id {}) in a tight grid near the player", count, g_monster_id);
     g_done = true;
 }

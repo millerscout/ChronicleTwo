@@ -1,5 +1,6 @@
 // clang-format off
 // nlohmann must precede the game headers, whose macros it would otherwise see.
+#include "platform/log.hpp"
 #include "platform/native_config.hpp"
 // clang-format on
 
@@ -96,7 +97,7 @@ PORT_OVERRIDE void CMdsList::LoadPCPFile(char *label, u_int *source, mgCMemory *
     const auto  files = datapacks::DirectoryMembers(*parent);
     const auto  capacity = std::count_if(files.begin(), files.end(), [](const auto &file) { return std::filesystem::path(file).extension() == ".gltf"; });
     if (capacity > MDS_PCP_ENTRY_MAX) {
-        std::println(stderr, "model list: too many native models");
+        CT_LOG_WARN("model list", "too many native models");
         return;
     }
     name = label ? CopyName(*memory, label) : nullptr;

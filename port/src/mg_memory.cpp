@@ -13,6 +13,7 @@
 #include "dataread_port.hpp"
 #include "mg_memory_port.hpp"
 #include "platform/arena.hpp"
+#include "platform/log.hpp"
 #include "texture_source.hpp"
 
 namespace {
@@ -269,7 +270,7 @@ PORT_OVERRIDE void mgCMemory::Free(u_long128 *data) {
 
     if (found == nullptr) {
         // Retail halts here. A host process that spins would hang the test run, so it aborts instead.
-        std::println(stderr, "Illegal Free Memory {}", static_cast<void *>(data));
+        CT_LOG_ERROR("memory", "Illegal Free Memory {}", static_cast<void *>(data));
         std::abort();
     }
 

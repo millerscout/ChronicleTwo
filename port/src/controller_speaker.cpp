@@ -14,6 +14,7 @@
 #include "audio/stream.hpp"
 #include "dualsense_haptics.hpp"
 #include "platform/config.hpp"
+#include "platform/log.hpp"
 #include "platform/settings.hpp"
 
 namespace {
@@ -92,7 +93,7 @@ SDL_AudioDeviceID FindDevice(int &channels) {
                 SDL_AudioSpec native{};
                 int           frames = 0;
                 SDL_GetAudioDeviceFormat(devices[i], &native, &frames);
-                std::println(stderr, "controller speaker: using \"{}\" ({} channels, {} Hz){}", name, native.channels,
+                CT_LOG_INFO("controller speaker", "using \"{}\" ({} channels, {} Hz){}", name, native.channels,
                              native.freq, native.channels >= 4 ? ", haptics on channels 3-4" : "");
                 channels = native.channels;
                 found = devices[i];
@@ -122,7 +123,7 @@ bool EnsureOpen() {
     const SDL_AudioDeviceID device = FindDevice(channels);
     if (device == 0) {
         if (!g_tried) {
-            std::println(stderr, "controller speaker: no DualSense audio device; sounds stay on the main output");
+            CT_LOG_INFO("controller speaker", "no DualSense audio device; sounds stay on the main output");
         }
         g_tried = true;
         SDL_QuitSubSystem(SDL_INIT_AUDIO);
@@ -137,7 +138,7 @@ bool EnsureOpen() {
     const SDL_AudioSpec spec{.format = SDL_AUDIO_F32, .channels = g_channels_out, .freq = audio::kSpuRate};
     g_stream = SDL_OpenAudioDeviceStream(device, &spec, Feed, nullptr);
     if (g_stream == nullptr) {
-        std::println(stderr, "controller speaker: cannot open the device: {}", SDL_GetError());
+        CT_LOG_WARN("controller speaker", "cannot open the device: {}", SDL_GetError());
         SDL_QuitSubSystem(SDL_INIT_AUDIO);
         return false;
     }

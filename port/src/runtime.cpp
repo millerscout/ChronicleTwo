@@ -6,12 +6,13 @@
 #include <print>
 
 #include "exitcodes.hpp"
+#include "platform/log.hpp"
 
 // stdout is flushed first so the game's own context (LoadFile names the file) precedes the message.
 // _Exit skips static destructors, which would tear the renderer down under a frame still in progress.
 extern "C" [[noreturn]] void __assert(const char *file, int line, const char *expression) {
     std::fflush(stdout);
-    std::println(stderr, "{}:{}: assertion failed: {}", file, line, expression);
+    CT_LOG_ERROR("assert", "{}:{}: assertion failed: {}", file, line, expression);
     std::fflush(nullptr);
     std::_Exit(kExitGameAssert);
 }

@@ -11,6 +11,7 @@
 #include "event_func.hpp"
 #include "mg_texture.hpp"
 #include "mglib.hpp"
+#include "platform/log.hpp"
 #include "platform/model_assets.hpp"
 #include "scene.hpp"
 
@@ -26,7 +27,7 @@ PORT_OVERRIDE int _LOAD_CHARA_sub(int stack_no, char **name, int chara_no, u32 *
         std::string error;
         const auto  game = model_assets::ReadGameplay(*path, error);
         if (!game) {
-            std::println(stderr, "character: {}", error);
+            CT_LOG_WARN("character", "{}", error);
             return 0;
         }
         static std::map<std::string, std::string> selected_profiles;

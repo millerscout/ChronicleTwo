@@ -31,6 +31,7 @@
 #include <utility>
 
 #include "platform/files.hpp"
+#include "platform/log.hpp"
 #include "platform/paths.hpp"
 #include "save_slots.hpp"
 
@@ -288,7 +289,7 @@ bool Archive(const fs::path &dir, bool second_card) {
         synced = synced && source_synced && target_synced;
 #endif
         if (!synced) {
-            std::println(stderr, "save import: archive moved but directory sync failed: {}",
+            CT_LOG_WARN("save import", "archive moved but directory sync failed: {}",
                          PathsDisplay(target));
         }
         // A reported sync failure after publication cannot roll back the move.

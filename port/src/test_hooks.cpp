@@ -1,3 +1,4 @@
+#include "platform/log.hpp"
 #include "test_hooks.hpp"
 
 #include <charconv>
@@ -38,13 +39,13 @@ bool Number(std::string_view text, int &value, int maximum) {
 }
 
 [[noreturn]] void BadTarget() {
-    std::println(stderr, "bad --jump: target is absent from the game tables");
+    CT_LOG_WARN("bad --jump", "target is absent from the game tables");
     std::exit(2);
 }
 
 void RequireKnownItem(int item) {
     if (GetCommonItemData(item) == nullptr) {
-        std::println(stderr, "bad --give: unknown item {}", item);
+        CT_LOG_WARN("bad --give", "unknown item {}", item);
         std::exit(2);
     }
 }

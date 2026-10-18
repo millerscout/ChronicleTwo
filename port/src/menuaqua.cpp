@@ -1,5 +1,6 @@
 // clang-format off
 // nlohmann must precede the game headers, whose macros it would otherwise see.
+#include "platform/log.hpp"
 #include "platform/native_config.hpp"
 // clang-format on
 
@@ -34,7 +35,7 @@ PORT_OVERRIDE int FishIMGReplace(u_long128 *data, CCharacter2 *character, int it
     }
     std::string error;
     if (!model_assets::ReplaceCharacterTextureDocument(*character, *relative, error)) {
-        std::println(stderr, "fish texture: {}", error);
+        CT_LOG_WARN("fish texture", "{}", error);
     }
     return 0;
 }

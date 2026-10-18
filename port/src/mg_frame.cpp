@@ -14,6 +14,7 @@
 #include "mg_visual_port.hpp"
 #include "mglib.hpp"
 #include "mglib_port.hpp"
+#include "platform/check.hpp"
 #include "stubs/mg_frame.hpp"
 
 PORT_OVERRIDE void mgCObject::SetPosition(float *input) {
@@ -40,6 +41,15 @@ PORT_OVERRIDE int mgCFrame::Draw(unsigned int *packet) {
     mgRENDER_INFO *info = &mgRenderInfo;
     int            words = 0;
     sceVu0FMATRIX  world;
+
+    const auto require = [](const auto *pointer, const char *what) {
+        if (pointer != nullptr) {
+            CT_CHECK(ct::PlausiblePointer(pointer), "%s", what);
+        }
+    };
+    require(attr, "mgCFrame::Draw attribute");
+    require(visual, "mgCFrame::Draw visual");
+    require(bound, "mgCFrame::Draw bound");
 
     if (attr == nullptr) {
         GetLWMatrixTopBottom(world);
@@ -144,6 +154,8 @@ PORT_OVERRIDE int mgCFrame::Draw(unsigned int *packet) {
     }
 
     for (mgCFrame *node = child; node != nullptr; node = node->brother) {
+        require(node, "mgCFrame::Draw child");
+        require(node->attr, "mgCFrame::Draw attribute");
         if (node->attr == nullptr || !(node->attr->draw & MG_FRAME_DRAW_SKIP_BY_PARENT)) {
             words += node->Draw(packet + words * 4);
         }

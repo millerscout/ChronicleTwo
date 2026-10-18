@@ -5,6 +5,7 @@
 #include <string>
 
 #include "platform/files.hpp"
+#include "platform/log.hpp"
 
 namespace fs = std::filesystem;
 using Json = nlohmann::json;
@@ -53,9 +54,8 @@ bool ParseSidecar(const char *bytes, std::size_t size, u64 image_counter, const 
     if (document.contains("unique_counter") && document["unique_counter"].is_number_unsigned()) {
         const u64 sidecar_counter = document["unique_counter"].get<u64>();
         if (sidecar_counter != image_counter) {
-            std::fprintf(stderr, "save extensions: stale sidecar for %s (file %llu, save %llu)\n", basename.c_str(),
-                         static_cast<unsigned long long>(sidecar_counter),
-                         static_cast<unsigned long long>(image_counter));
+            CT_LOG_WARN("save extensions", "stale sidecar for {} (file {}, save {})", basename,
+                        static_cast<unsigned long long>(sidecar_counter), static_cast<unsigned long long>(image_counter));
         }
     }
     return true;

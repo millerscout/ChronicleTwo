@@ -24,6 +24,7 @@
 #define STBI_ONLY_PNG
 #define STBI_NO_STDIO
 #include "kazarov_bridge/rust/lib.h"
+#include "platform/log.hpp"
 #include "stb_image.h"
 
 #include "platform/archive_mount.hpp"
@@ -97,7 +98,7 @@ struct TraceCounters {
     ~TraceCounters() {
         const std::scoped_lock lock(mutex);
         for (const auto &[name, total] : totals) {
-            std::println(stderr, "texture-trace: {} = {}", name, static_cast<unsigned long long>(total));
+            CT_LOG_INFO("texture-trace", "{} = {}", name, static_cast<unsigned long long>(total));
         }
     }
 };
@@ -256,7 +257,7 @@ std::optional<Pack> OpenPack(const std::filesystem::path &directory, const std::
  * Reports a rejected configuration or asset with its path.
  */
 void Diagnostic(const std::filesystem::path &path, const std::string &message) {
-    std::println(stderr, "datapacks: {}: {}", Display(path), message);
+    CT_LOG_WARN("datapacks", "{}: {}", Display(path), message);
 }
 
 /**

@@ -15,6 +15,7 @@
 #include "mg_dataset.hpp"
 #include "mglib.hpp"
 #include "nowload.hpp"
+#include "platform/log.hpp"
 #include "platform/model_assets.hpp"
 
 bool PortLoadDungeonArticleModels() {
@@ -28,7 +29,7 @@ bool PortLoadDungeonArticleModels() {
     auto        model = [&](const char *name) {
         auto *frame = model_assets::LoadModelScene(bundle, name, load, error);
         if (!frame) {
-            std::println(stderr, "dungeon article {}: {}", name, error);
+            CT_LOG_WARN("dungeon article", "{}: {}", name, error);
         }
         return frame;
     };
@@ -61,12 +62,12 @@ bool PortLoadDungeonArticleModels() {
     options.texture_block = 0xad;
     GeoStone.Initialize();
     if (!model_assets::LoadCharacter(GeoStone, children + "giostone.gltf", "info", options, error)) {
-        std::println(stderr, "dungeon geostone: {}", error);
+        CT_LOG_WARN("dungeon geostone", "{}", error);
         return false;
     }
     RandomCircle.Initialize();
     if (!model_assets::LoadCharacter(RandomCircle.model, children + "ring_loop.gltf", "info", options, error)) {
-        std::println(stderr, "dungeon circle: {}", error);
+        CT_LOG_WARN("dungeon circle", "{}", error);
         return false;
     }
     constexpr std::array<const char *, 3> sparks{"bteffe_att_a", "bteffe_att_b", "bteffe_att_c"};
@@ -89,7 +90,7 @@ bool PortLoadDungeonArticleModels() {
     for (std::size_t index = 0; index < items.size(); ++index) {
         ItemBaseData[index].Initialize();
         if (!model_assets::LoadCharacter(ItemBaseData[index], std::format("dungeon/articles/item01b.assets/{}.gltf", items[index]), "info", options, error)) {
-            std::println(stderr, "dungeon item {}: {}", items[index], error);
+            CT_LOG_WARN("dungeon item", "{}: {}", items[index], error);
             return false;
         }
     }

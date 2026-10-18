@@ -15,6 +15,7 @@
 #include "exitcodes.hpp"
 #include "kazarov/data_version.hpp"
 #include "platform/firstrun.hpp"
+#include "platform/log.hpp"
 #include "platform/paths.hpp"
 
 namespace fs = std::filesystem;
@@ -74,7 +75,7 @@ void FirstRunRequireData(const fs::path &root, bool headless) {
                 return;
             }
         } catch (const std::exception &error) {
-            std::println(stderr, "Game data setup: {}", error.what());
+            CT_LOG_ERROR("Game data setup", "{}", error.what());
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Dark Chronicle", error.what(), nullptr);
         }
     }

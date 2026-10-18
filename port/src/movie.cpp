@@ -21,6 +21,7 @@
 #include "movie_port.hpp"
 #include "platform/clock.hpp"
 #include "platform/datapacks.hpp"
+#include "platform/log.hpp"
 #include "platform/paths.hpp"
 #include "video/player.hpp"
 
@@ -156,11 +157,11 @@ PORT_OVERRIDE void CMovie::Load(char *name, mgCMemory ** /*unused*/, int width, 
     g_movie.player.SetRetailSize(width, height);
     g_movie.opened = g_movie.player.Open(g_movie.path, with_audio);
     if (!g_movie.opened) {
-        std::println(stderr, "movie: {} not found or not a playable MP4 ({})", name,
+        CT_LOG_WARN("movie", "{} not found or not a playable MP4 ({})", name,
                      PathsDisplay(g_movie.path));
     } else if (g_movie.player.SourceWidth() != g_movie.player.Width() ||
                g_movie.player.SourceHeight() != g_movie.player.Height()) {
-        std::println(stderr, "movie: {} is {}x{}; a replacement should be 1, 2 or 4 times {}x{}, so it is resampled to {}x{}",
+        CT_LOG_INFO("movie", "{} is {}x{}; a replacement should be 1, 2 or 4 times {}x{}, so it is resampled to {}x{}",
                      name, g_movie.player.SourceWidth(), g_movie.player.SourceHeight(), width, height,
                      g_movie.player.Width(), g_movie.player.Height());
     }

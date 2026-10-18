@@ -9,6 +9,7 @@
 
 #include "dataread_port.hpp"
 #include "mg_memory.hpp"
+#include "platform/log.hpp"
 #include "snd_seseq.hpp"
 
 PORT_OVERRIDE void sndCSeSeqData::LoadSMF(char *source, int size, mgCMemory *memory) {
@@ -54,5 +55,5 @@ PORT_OVERRIDE void sndCSeSeqData::LoadSMF(char *source, int size, mgCMemory *mem
             Initialize();
         }
     }
-    std::println(stderr, "sound: missing or invalid effect sequence JSON");
+    CT_LOG_WARN("sound", "missing or invalid effect sequence JSON");
 }

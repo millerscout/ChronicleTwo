@@ -1,3 +1,4 @@
+#include "platform/log.hpp"
 #include "script_timing.hpp"
 
 #include <algorithm>
@@ -739,12 +740,12 @@ bool Patch(const char *asset_path, unsigned char *bytes, std::size_t size) {
     Result            result = Apply(key, bytes, size);
     if (!result.ok) {
         if (logged_assets.insert(key).second) {
-            std::println(stderr, "script timing: {} does not match the PAL script the NTSC timing converts ({})", key, result.error);
+            CT_LOG_ERROR("script timing", "{} does not match the PAL script the NTSC timing converts ({})", key, result.error);
         }
         return false;
     }
     if (result.known && logged_assets.insert(key).second) {
-        std::println(stderr, "script timing: {}: {} instructions ({})", key, result.writes, Describe(result.counts));
+        CT_LOG_INFO("script timing", "{}: {} instructions ({})", key, result.writes, Describe(result.counts));
     }
     return true;
 }

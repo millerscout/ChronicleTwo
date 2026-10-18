@@ -24,9 +24,17 @@
 #include "mglib.hpp"
 #include "mglib_port.hpp"
 #include "photo_hd.hpp"
+#include "platform/check.hpp"
 #include "platform/datapacks.hpp"
+#include "platform/log.hpp"
 #include "platform/texture_catalog.hpp"
 #include "texture_source.hpp"
+
+void RequireTexturePointer(const mgCTexture *texture, const char *where) {
+    if (texture != nullptr) {
+        CT_CHECK(ct::PlausiblePointer(texture), "%s", where);
+    }
+}
 
 namespace {
 
@@ -353,7 +361,7 @@ void Rebuild(const mgCTexture *texture, Entry &entry) {
     }
 
     if (texture->image[0] != nullptr && !entry.catalog && texture->bpp != 32) {
-        std::println(stderr, "texture: {} has unsupported non-RGBA memory pixels", texture->name);
+        CT_LOG_WARN("texture", "{} has unsupported non-RGBA memory pixels", texture->name);
         return;
     }
     entry.image = UploadPixels(texture);
@@ -363,6 +371,7 @@ void Rebuild(const mgCTexture *texture, Entry &entry) {
 }
 
 void Resolve(const mgCTexture *texture, Entry &entry) {
+    RequireTexturePointer(texture, "Resolve texture");
     if (!RendererUp()) {
         return;
     }
@@ -667,7 +676,7 @@ mgCTexture *EnterCatalog(mgCTextureManager *manager, int block, const texture_ca
     datapacks::DecodedTexture decoded;
     datapacks::TraceTimer     decode_timer("mg_texture.decode_us");
     if (!DecodeWith(decoder, record, 0, decoded, error)) {
-        std::println(stderr, "texture: {}: {}", record.name, error);
+        CT_LOG_WARN("texture", "{}: {}", record.name, error);
         return nullptr;
     }
     auto original = std::make_shared<NativePicture>();
@@ -682,7 +691,7 @@ mgCTexture *EnterCatalog(mgCTextureManager *manager, int block, const texture_ca
         for (std::size_t variant = 1; variant < record.variants.size(); ++variant) {
             datapacks::DecodedTexture alternate;
             if (!DecodeWith(decoder, record, variant, alternate, error)) {
-                std::println(stderr, "texture: {}: {}", record.name, error);
+                CT_LOG_WARN("texture", "{}: {}", record.name, error);
                 return nullptr;
             }
             original->variants.push_back(std::move(alternate));
@@ -1302,6 +1311,8 @@ bool MgTextureCopyRegion(const mgCTexture *source, int sx, int sy, mgCTexture *d
 }
 
 void MgTexturePrepareAnimationDestination(const mgCTexture *source, mgCTexture *destination) {
+    RequireTexturePointer(source, "MgTexturePrepareAnimationDestination source");
+    RequireTexturePointer(destination, "MgTexturePrepareAnimationDestination destination");
     if (!source || !destination || destination->image[0] || !Registry().entries.contains(destination)) {
         return;
     }
@@ -1325,6 +1336,7 @@ MgTextureHandles MgTextureLookup(const mgCTexture *texture) {
     if (texture == nullptr) {
         return {};
     }
+    RequireTexturePointer(texture, "MgTextureLookup");
 
     TextureRegistry &registry = Registry();
     const auto       found = registry.entries.find(texture);
@@ -1554,7 +1566,7 @@ PORT_OVERRIDE mgCTexture *mgCTextureManager::EnterTexture(int id, char *name, TM
     const auto  source_name = TextureSourceLookup(head);
     const auto *source = source_name ? texture_catalog::Find(*source_name) : nullptr;
     if (!source) {
-        std::println(stderr, "texture: no catalog source for {}", name);
+        CT_LOG_WARN("texture", "no catalog source for {}", name);
         return nullptr;
     }
     for (const auto &entry : source->entries) {
@@ -1562,7 +1574,7 @@ PORT_OVERRIDE mgCTexture *mgCTextureManager::EnterTexture(int id, char *name, TM
             return EnterCatalog(this, id, entry);
         }
     }
-    std::println(stderr, "texture: {} has no entry in {}", name, *source_name);
+    CT_LOG_WARN("texture", "{} has no entry in {}", name, *source_name);
     return nullptr;
 }
 
@@ -1625,7 +1637,7 @@ int MgTextureEnterDocument(mgCTextureManager *manager, std::string_view relative
                            mgCMemory *stack, mgCEnterIMGInfo *info) {
     const auto *source = texture_catalog::Find(relative_json_path);
     if (!source) {
-        std::println(stderr, "texture: no native texture document for {:.{}}",
+        CT_LOG_WARN("texture", "no native texture document for {:.{}}",
                      relative_json_path.data(), static_cast<int>(relative_json_path.size()));
         return 0;
     }

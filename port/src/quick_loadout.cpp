@@ -30,6 +30,7 @@
 #include "mglib_port.hpp"
 #include "photo.hpp"
 #include "platform/config.hpp"
+#include "platform/log.hpp"
 #include "platform/paths.hpp"
 #include "prespr.hpp"
 #include "quick_loadout.hpp"
@@ -174,7 +175,7 @@ void LoadSlots() {
 void SaveSlots() {
     std::FILE *file = std::fopen(SlotsPath().string().c_str(), "w");
     if (file == nullptr) {
-        std::println(stderr, "quick loadout: cannot write {}", SlotsPath().string());
+        CT_LOG_WARN("quick loadout", "cannot write {}", SlotsPath().string());
         return;
     }
     for (int chara = 0; chara < kCharas; chara++) {

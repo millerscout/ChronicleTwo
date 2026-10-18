@@ -19,6 +19,7 @@
 #include "mg_texture_port.hpp"
 #include "mglib.hpp"
 #include "mglib_port.hpp"
+#include "platform/log.hpp"
 
 // The GS evaluates UV at integer pixel positions and nearest-samples floor(u), so the texel one past the last
 // covered pixel is never read. Sampling at pixel centres would read it and bleed the neighbouring glyph into the cell.
@@ -419,7 +420,7 @@ PORT_OVERRIDE void mgCDrawPrim::Data(int *data) {
 
     if (!reported) {
         reported = true;
-        std::fprintf(stderr, "mg_drawprim: packed GIF data ignored; its caller needs a port override\n");
+        CT_LOG_WARN("mg_drawprim", "packed GIF data ignored; its caller needs a port override");
     }
 }
 
@@ -507,7 +508,7 @@ PORT_OVERRIDE void mgCDrawPrim::Direct(unsigned long long reg, unsigned long lon
             break;
         default:
             if (ignored_direct_registers.insert(reg).second) {
-                std::fprintf(stderr, "mg_drawprim: Direct register 0x%x ignored\n", static_cast<unsigned>(reg));
+                CT_LOG_WARN("mg_drawprim", "Direct register 0x{:x} ignored", static_cast<unsigned>(reg));
             }
 
             break;

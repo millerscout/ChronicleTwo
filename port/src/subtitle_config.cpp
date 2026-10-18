@@ -5,6 +5,7 @@
 #include <print>
 
 #include "nd_meswin.hpp"
+#include "platform/log.hpp"
 #include "platform/subtitle_config.hpp"
 
 PORT_OVERRIDE void MovieCCAnalyze(char *text, int size, int id) {
@@ -23,7 +24,7 @@ PORT_OVERRIDE void MovieCCAnalyze(char *text, int size, int id) {
     std::string                       error;
     if (!subtitle_config::Decode(std::string_view(text, static_cast<std::size_t>(size)), chapter, cues, error)) {
         if (!error.empty()) {
-            std::println(stderr, "subtitles: {}", error);
+            CT_LOG_WARN("subtitles", "{}", error);
         }
         return;
     }

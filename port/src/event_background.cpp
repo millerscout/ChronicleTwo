@@ -13,6 +13,7 @@
 #include "event_func.hpp"
 #include "gamedata.hpp"
 #include "mainloop.hpp"
+#include "platform/log.hpp"
 #include "runscript.hpp"
 
 namespace {
@@ -51,7 +52,7 @@ bool CanReadEventFiles() {
     if (EdEventInfo.stream_reading != 1) {
         return true;
     }
-    std::println(stderr, "event: file access requested while a stream is open");
+    CT_LOG_WARN("event", "file access requested while a stream is open");
     return false;
 }
 } // namespace

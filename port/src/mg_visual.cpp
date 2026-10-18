@@ -14,6 +14,7 @@
 #include "mg_visual_port.hpp"
 #include "mglib.hpp"
 #include "mglib_port.hpp"
+#include "platform/check.hpp"
 #include "visualmotion.hpp"
 
 namespace {
@@ -646,6 +647,7 @@ PORT_OVERRIDE int mgCVisualMDT::Draw(u_int *tag, float (*matrix)[4], mgCDrawMana
         // Retail SetMaterialRef writes this texture's CLAMP for every material.
         // Record it with the mesh instead of inheriting another draw's wrap state.
         if (mat->texture != nullptr) {
+            CT_CHECK(ct::PlausiblePointer(mat->texture), "mgCFrame::Draw texture");
             binding.wrap_u = mgPortWrapU(mat->texture->clamp_bits);
             binding.wrap_v = mgPortWrapV(mat->texture->clamp_bits);
         }
@@ -689,6 +691,9 @@ PORT_OVERRIDE int mgCVisualMDT::Draw(u_int *tag, float (*matrix)[4], mgCDrawMana
             SubmitFaces(draw, faces);
         });
 
+        if (mat->texture != nullptr) {
+            CT_CHECK(ct::PlausiblePointer(mat->texture), "mgCFrame::Draw texture");
+        }
         const int block = mat->texture != NULL ? mat->texture->block : -1;
         draw_manager->AddPacket(block, common, packet, group->vu_program);
     }

@@ -23,7 +23,9 @@
 #include "mapsky.hpp"
 #include "mg_texture.hpp"
 #include "mglib.hpp"
+#include "platform/breadcrumbs.hpp"
 #include "platform/clock.hpp"
+#include "platform/log.hpp"
 #include "platform/model_assets.hpp"
 #include "scene.hpp"
 #include "sceneload.hpp"
@@ -59,7 +61,7 @@ PORT_OVERRIDE int CScene::LoadChara(int index, u_int *model, char *profile, mgCM
     character->Initialize();
     model_assets::CharacterLoadOptions options{.model_memory = model_memory, .motion_memory = motion_memory, .image_memory = image_memory, .textures = &mgTexManager, .parent = nullptr, .texture_block = texture_block, .outline = no_outline == 0};
     if (!model_assets::LoadCharacter(*character, *path, profile, options, error)) {
-        std::println(stderr, "character: {}: {}", *path, error);
+        CT_LOG_WARN("character", "{}: {}", *path, error);
         DeleteChara(slot);
         return -1;
     }
@@ -89,6 +91,7 @@ PORT_OVERRIDE int CScene::LoadMapFromMemory(int map_no, int step, SCN_LOADMAP_IN
     int        tex_block = info->tex_block;
 
     if (step == SCN_LOADMAP_STEP_CREATE) {
+        BreadcrumbSetf(Crumb::Scene, "loading map %d", map_no);
         CEditMap *edit_map = nullptr;
 
         if (info->data_ready == 0) {

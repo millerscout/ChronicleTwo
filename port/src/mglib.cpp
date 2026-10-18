@@ -31,6 +31,7 @@
 #include "mglib_port.hpp"
 #include "photo_hd.hpp"
 #include "platform/clock.hpp"
+#include "platform/log.hpp"
 #include "platform/paths.hpp"
 #include "present.hpp"
 #include "scenesnd.hpp"
@@ -322,7 +323,7 @@ bool ReadNow(gfx::TextureHandle target, std::vector<uint8_t> &rgba, uint32_t &wi
 
 bool WriteScreenshotDisplayFrames() {
     if (PresentGetSettings().interpolation && mgPortPreviousList() == nullptr) {
-        std::println(stderr, "mglib: frame {} has no previous list, display frames skipped", frame_count);
+        CT_LOG_WARN("mglib", "frame {} has no previous list, display frames skipped", frame_count);
         return true;
     }
 
@@ -340,10 +341,10 @@ bool WriteScreenshotDisplayFrames() {
         written = PresentScreenshotDisplay(alpha, rgba, width, height) && gfx::WritePng(path, rgba.data(), width, height);
 
         if (written) {
-            std::println(stderr, "mglib: display frame {} of frame {} written to {}", k, frame_count,
+            CT_LOG_INFO("mglib", "display frame {} of frame {} written to {}", k, frame_count,
                          PathsDisplay(path));
         } else {
-            std::println(stderr, "mglib: display frame {} of frame {} could not be written to {}", k, frame_count,
+            CT_LOG_WARN("mglib", "display frame {} of frame {} could not be written to {}", k, frame_count,
                          PathsDisplay(path));
         }
     }
@@ -1445,10 +1446,10 @@ PORT_OVERRIDE void mgEndFrame(mgCDrawManager *manager) {
             written = written && gfx::WritePng(screenshot_path, rgba.data(), width, height);
 
             if (written) {
-                std::println(stderr, "mglib: frame {} written to {}", frame_count,
+                CT_LOG_INFO("mglib", "frame {} written to {}", frame_count,
                              PathsDisplay(screenshot_path));
             } else {
-                std::println(stderr, "mglib: frame {} could not be written to {}", frame_count,
+                CT_LOG_WARN("mglib", "frame {} could not be written to {}", frame_count,
                              PathsDisplay(screenshot_path));
                 status = kExitScreenshotFailed;
             }

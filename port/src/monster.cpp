@@ -1,5 +1,6 @@
 // nlohmann must precede the game headers, whose macros it would otherwise see.
 // clang-format off
+#include "platform/log.hpp"
 #include "platform/native_config.hpp"
 // clang-format on
 
@@ -43,7 +44,7 @@ PORT_OVERRIDE int CMonsterMan::LoadReferMonsterFile(int id, BASE_MONSTER_TBL *ta
     const bool  loaded = model_assets::LoadCharacter(entry.chara, model_path, table->model, options, error);
     mgTexManager.name_suffix[0] = 0;
     if (!loaded) {
-        std::println(stderr, "monster: {}", error);
+        CT_LOG_WARN("monster", "{}", error);
         return false;
     }
     entry.chara.tbl = table;

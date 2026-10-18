@@ -14,6 +14,7 @@
 #include "mg_drawprim_port.hpp"
 #include "mglib_port.hpp"
 #include "platform/config.hpp"
+#include "platform/log.hpp"
 #include "platform/paths.hpp"
 #include "platform/ttffont.hpp"
 
@@ -47,12 +48,12 @@ bool Ready() {
                 loaded = ttffont::Load(file);
             }
             if (loaded) {
-                std::println(stderr, "font: sharp ASCII text from {}", PathsDisplay(file));
+                CT_LOG_INFO("font", "sharp ASCII text from {}", PathsDisplay(file));
             }
             break; // A present save override wins, including when it cannot be loaded.
         }
         if (!loaded) {
-            std::println(stderr, "font: no usable lang/font.ttf; keeping original text (docs/PC.md)");
+            CT_LOG_WARN("font", "no usable lang/font.ttf; keeping original text (docs/PC.md)");
         }
     }
     return loaded;

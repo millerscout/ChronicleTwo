@@ -9,6 +9,7 @@
 #include "dataread_port.hpp"
 #include "gameutil.hpp"
 #include "mg_math.hpp"
+#include "platform/log.hpp"
 #include "platform/model_assets.hpp"
 
 PORT_OVERRIDE void SetMotionTime(mgCFrame *root, tagMOTION_TYPE *motion, float time, mgCCamera *camera) {
@@ -22,7 +23,7 @@ PORT_OVERRIDE void ChangeMotion(mgCFrame *root, tagMOTION_TYPE *motion, unsigned
 
 // Retail motion files never reach native profiles, which load named glTF actions instead.
 PORT_OVERRIDE int CreateAnimeDataEX(tagMOTION_TYPE * /*unused*/, mgCMemory * /*unused*/, MOTION_FILE_INFO * /*unused*/) {
-    std::println(stderr, "animation: retail motion data is not supported; profiles load named glTF actions");
+    CT_LOG_WARN("animation", "retail motion data is not supported; profiles load named glTF actions");
     return false;
 }
 
@@ -47,7 +48,7 @@ PORT_OVERRIDE void ChangeWeight(Mot_List *list, mgCMemory *memory, u8 *data, int
         std::string    error;
         const auto     path = DataReadBufferPath(data);
         if (!path) {
-            std::println(stderr, "animation: direct glTF weight path required");
+            CT_LOG_WARN("animation", "direct glTF weight path required");
             return;
         }
         if (!model_assets::LoadAnimation(std::filesystem::path(*path), replacement, *memory, std::nullopt, std::nullopt, 0, std::nullopt, error)) {
@@ -87,7 +88,7 @@ PORT_OVERRIDE void ChangeWeight(Mot_List *list, mgCMemory *memory, u8 *data, int
             }
         }
     } catch (const std::exception &error) {
-        std::println(stderr, "animation: {}", error.what());
+        CT_LOG_WARN("animation", "{}", error.what());
     }
 }
 

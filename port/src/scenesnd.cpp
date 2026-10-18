@@ -14,6 +14,7 @@
 
 #include "audio_assets.hpp"
 #include "dataread_port.hpp"
+#include "platform/log.hpp"
 #include "scenesnd.hpp"
 
 namespace {
@@ -63,7 +64,7 @@ std::optional<std::vector<Record> > SceneRows(char *source, int size, const char
             error = exception.what();
         }
     }
-    std::println(stderr, "scene audio: {}", error);
+    CT_LOG_WARN("scene audio", "{}", error);
     return std::nullopt;
 }
 

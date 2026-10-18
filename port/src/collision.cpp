@@ -13,6 +13,7 @@
 #include "mg_math.hpp"
 #include "mg_visual.hpp"
 #include "mglib.hpp"
+#include "platform/log.hpp"
 #include "platform/model_assets.hpp"
 #include "texture_source.hpp"
 
@@ -83,7 +84,7 @@ mgCFrame *LoadGeometry(const std::filesystem::path &path, mgCMemory *memory, std
     auto       *frames = scene.empty() ? model_assets::LoadModel(path, load, error)
                                        : model_assets::LoadModelScene(path, scene, load, error);
     if (!frames) {
-        std::println(stderr, "collision: {}", error);
+        CT_LOG_WARN("collision", "{}", error);
     }
     return frames;
 }

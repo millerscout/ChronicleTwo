@@ -28,6 +28,7 @@
 #include "mg_texture_port.hpp"
 #include "mglib.hpp"
 #include "mglib_port.hpp"
+#include "platform/log.hpp"
 #include "platform/model_assets.hpp"
 #include "platform/texture_bundle.hpp"
 #include "stubs/menudraw.hpp"
@@ -409,7 +410,7 @@ bool EnterRepairTexture(const void *data, int block) {
         std::string error;
         loaded = texture_bundle::Enter(*path, "menueff0", mgTexManager, block, nullptr, error);
         if (!loaded) {
-            std::println(stderr, "repair texture: {}", error);
+            CT_LOG_WARN("repair texture", "{}", error);
         }
     } else if (const auto directory = AssetDirectoryPath(data)) {
         MgTextureEnterDocument(&mgTexManager, *directory + "/repair_powder2d.json", block, nullptr, nullptr);
@@ -480,7 +481,7 @@ PORT_OVERRIDE void CRepairManager::GeneratePoly(float *position, int block) {
         model_assets::DeleteCharacterTextures(*character, 0, CHARA_IMAGE_MAX - 1);
         model_stack.stack_used = 0;
         model_stack.lock = 0;
-        std::println(stderr, "repair model: {}", error);
+        CT_LOG_WARN("repair model", "{}", error);
         return;
     }
     model = character;

@@ -13,8 +13,11 @@
 #include "mainloop.hpp"
 #include "menu_mouse.hpp"
 #include "menu_mouse_item.hpp"
+#include "pad_remap.hpp"
 #include "pad_rumble.hpp"
+#include "platform/config.hpp"
 #include "platform/input.hpp"
+#include "platform/log.hpp"
 #include "platform/paths.hpp"
 #include "test_hooks.hpp"
 
@@ -34,6 +37,11 @@ PORT_OVERRIDE void CGamePad::UpDate() {
     for (int port = 0; port < 2; ++port) {
         previous_pad[port] = pad[port];
         PortReadPad(&pad[port], port, 0);
+        const PadRemapTable &remap = ConfigGet().pad_remap;
+        if (remap != PadRemapIdentity()) {
+            pad[port].button = PadRemapApply(static_cast<std::uint16_t>(pad[port].button),
+                                             PadRemapControllerBits(port), remap);
+        }
     }
 
     const bool playback = capture_mode == PAD_CAPTURE_PLAY;
@@ -203,7 +211,7 @@ PORT_OVERRIDE void CGamePad::SaveCapture() {
         file.write(reinterpret_cast<const char *>(bytes), sizeof(bytes));
     }
     if (!file) {
-        std::println(stderr, "gamepad: could not save key_cap.bin");
+        CT_LOG_WARN("gamepad", "could not save key_cap.bin");
     }
 }
 
@@ -217,7 +225,7 @@ PORT_OVERRIDE void CGamePad::LoadCapture() {
     }
     const auto size = file.tellg();
     if (size < 0 || size > static_cast<std::streamoff>(PAD_CAPTURE_FRAME_MAX * 6) || size % 6 != 0) {
-        std::println(stderr, "gamepad: invalid key_cap.bin size");
+        CT_LOG_WARN("gamepad", "invalid key_cap.bin size");
         return;
     }
     file.seekg(0);

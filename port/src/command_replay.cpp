@@ -15,6 +15,7 @@
 #include <stdexcept>
 
 #include "platform/legacy_encoding.hpp"
+#include "platform/log.hpp"
 #include "script_guards.hpp"
 #include "stubs/dynamicanime.hpp"
 
@@ -134,7 +135,7 @@ bool RunBuffer(const char *script, int size, SPI_TAG_PARAM *tags) {
         Run(document.at("commands"), tags);
         return true;
     } catch (const std::exception &exception) {
-        std::println(stderr, "command list: {}", exception.what());
+        CT_LOG_WARN("command list", "{}", exception.what());
         return false;
     }
 }

@@ -31,6 +31,7 @@
 #include "menusys.hpp"
 #include "monster.hpp"
 #include "nd_meswin.hpp"
+#include "platform/log.hpp"
 #include "scenesnd.hpp"
 #include "script_guards.hpp"
 #include "stubs/actscript.hpp"
@@ -419,9 +420,9 @@ void Report(const void *function, const char *kind, const char *name, int index,
     }
     const std::string handler = name != nullptr ? std::string(name) : std::to_string(index);
     if (rule.kind == RuleKind::Custom) {
-        std::println(stderr, "script guard: {} {} arguments are outside its tables; call skipped", kind, handler);
+        CT_LOG_WARN("script guard", "{} {} arguments are outside its tables; call skipped", kind, handler);
     } else {
-        std::println(stderr, "script guard: {} {} argument {} is outside [{}, {}); call skipped", kind, handler, rule.argument, rule.first, rule.end);
+        CT_LOG_WARN("script guard", "{} {} argument {} is outside [{}, {}); call skipped", kind, handler, rule.argument, rule.first, rule.end);
     }
 }
 

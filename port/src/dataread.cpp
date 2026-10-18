@@ -28,8 +28,10 @@
 #include "dataread.hpp"
 #include "dataread_port.hpp"
 #include "platform/archive_mount.hpp"
+#include "platform/breadcrumbs.hpp"
 #include "platform/config_catalog.hpp"
 #include "platform/datapacks.hpp"
+#include "platform/log.hpp"
 #include "platform/paths.hpp"
 #include "platform/texture_catalog.hpp"
 #include "platform/vfs.hpp"
@@ -351,7 +353,7 @@ void BuildIndex(const std::shared_ptr<const vfs::Mount> &base, const fs::path &r
     file_index.clear();
     index_built = true;
     if (!base) {
-        std::println(stderr, "dataread: indexed 0 files under {} (no data)", PathsDisplay(root));
+        CT_LOG_INFO("dataread", "indexed 0 files under {} (no data)", PathsDisplay(root));
         return;
     }
 
@@ -368,7 +370,7 @@ void BuildIndex(const std::shared_ptr<const vfs::Mount> &base, const fs::path &r
         const bool  replaced = replacement.has_value();
         file_index.insert_or_assign(std::move(key), IndexedFile{.file = replaced ? std::move(*replacement) : vfs::Ref(base, index), .replaced = replaced, .relative = std::move(relative)});
     }
-    std::println(stderr, "dataread: indexed {} files under {}", file_index.size(), PathsDisplay(root));
+    CT_LOG_INFO("dataread", "indexed {} files under {}", file_index.size(), PathsDisplay(root));
 }
 
 } // namespace
@@ -389,7 +391,7 @@ void DataReadIndex(const fs::path &root) {
         try {
             base = ArchiveMountOpen(archive);
         } catch (const std::exception &exception) {
-            std::println(stderr, "dataread: {}: {}", PathsDisplay(archive), exception.what());
+            CT_LOG_WARN("dataread", "{}: {}", PathsDisplay(archive), exception.what());
         }
     } else {
         base = vfs::OpenDirectory(data_root);
@@ -403,7 +405,7 @@ void DataReadIndex(const fs::path &root) {
     datapacks::Load(base, data_root);
     texture_catalog::SetCandidateResolver(datapacks::Candidates);
     BuildIndex(base, location);
-    std::println(stderr, "dataread: index ready in {:.3f} seconds",
+    CT_LOG_INFO("dataread", "index ready in {:.3f} seconds",
                  std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
 }
 
@@ -572,7 +574,7 @@ ScriptTimingValidation DataReadValidateScriptTiming() {
         const ScriptTimingOutcome &outcome = outcomes[i];
         report.files++;
         if (outcome.undecoded && undecoded_script_warnings.insert(key).second) {
-            std::println(stderr, "script timing startup: warning: {} is an unlisted, undecodable script; leaving it unchanged ({})",
+            CT_LOG_WARN("script timing startup", "warning: {} is an unlisted, undecodable script; leaving it unchanged ({})",
                          key, outcome.reason);
         }
         if (!outcome.error.empty()) {
@@ -585,14 +587,14 @@ ScriptTimingValidation DataReadValidateScriptTiming() {
 
 bool DataReadPrepareScriptTiming(bool headless) {
     const auto report = DataReadValidateScriptTiming();
-    std::println(stderr, "script timing startup: {} scripts, {} mismatches, {:.3f} seconds",
+    CT_LOG_INFO("script timing startup", "{} scripts, {} mismatches, {:.3f} seconds",
                  report.files, report.errors.size(), report.seconds);
     if (report.errors.empty()) {
         return true;
     }
     std::string message = "These scripts cannot use NTSC gameplay timing:\n\n";
     for (std::size_t i = 0; i < report.errors.size(); ++i) {
-        std::println(stderr, "script timing startup: {}", report.errors[i]);
+        CT_LOG_ERROR("script timing startup", "{}", report.errors[i]);
         if (i < 8) {
             message += report.errors[i] + "\n";
         }
@@ -600,7 +602,7 @@ bool DataReadPrepareScriptTiming(bool headless) {
     if (report.errors.size() > 8) {
         message += "\nAdditional mismatches are listed in the log.\n";
     }
-    std::println(stderr, "script timing startup: NTSC timing unavailable; refusing startup");
+    CT_LOG_ERROR("script timing startup", "NTSC timing unavailable; refusing startup");
     if (!headless) {
         message += "\nThe game cannot start with this script data. See the log for details.";
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Dark Chronicle - Script timing", message.c_str(), nullptr);
@@ -631,7 +633,7 @@ PORT_OVERRIDE void SetCurrentDir(char *dir) {
     }
     const std::string_view directory(dir);
     if (directory.size() > directory_limit) {
-        std::println(stderr, "dataread: current directory longer than {} bytes ignored: {}", directory_limit, dir);
+        CT_LOG_WARN("dataread", "current directory longer than {} bytes ignored: {}", directory_limit, dir);
         return;
     }
     current_dir = directory;
@@ -661,6 +663,7 @@ PORT_OVERRIDE int LoadFileBG(char *name, u_long128 *buffer, int *out_size) {
     if (!name || *name == '\0' || !buffer) {
         return 0;
     }
+    BreadcrumbSet(Crumb::Asset, name);
     TextureSourceForget(buffer);
     loaded_buffers.erase(buffer);
 
@@ -754,7 +757,7 @@ PORT_OVERRIDE void BreakReadBG() {
 // the load that needs it.
 PORT_OVERRIDE int LoadFile(char *path, void *buffer, int *out_size) {
     if (!LoadFile2(path, buffer, out_size, LOAD_FILE_READ)) {
-        std::println(stderr, "File open error \"{}\"\n \n ", path);
+        CT_LOG_ERROR("dataread", "File open error \"{}\"", path);
         Exit(0);
     }
     return 1;
@@ -767,6 +770,7 @@ PORT_OVERRIDE int LoadFile2(char *path, void *buffer, int *out_size, int mode) {
     if (!path || *path == '\0' || (mode != LOAD_FILE_SIZE && !buffer)) {
         return 0;
     }
+    BreadcrumbSet(Crumb::Asset, path);
     if (mode != LOAD_FILE_SIZE) {
         TextureSourceForget(buffer);
         loaded_buffers.erase(buffer);
@@ -868,7 +872,7 @@ PORT_OVERRIDE int WriteFile(char *path, void *buffer, int size) {
         return 0;
     }
     if (std::string_view(path).starts_with("net:")) {
-        std::println(stderr, "dataread: no network socket on the host, not writing {}", path);
+        CT_LOG_INFO("dataread", "no network socket on the host, not writing {}", path);
         return 0;
     }
 

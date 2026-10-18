@@ -1,3 +1,4 @@
+#include "platform/log.hpp"
 #include "present.hpp"
 
 #include <algorithm>
@@ -153,7 +154,7 @@ void NotePresented() {
 
     if (settings.log_fps && now - last_log >= std::chrono::seconds(1)) {
         last_log = now;
-        std::println(stderr, "present: {}", PresentFpsText());
+        CT_LOG_INFO("present", "{}", PresentFpsText());
     }
 }
 

@@ -46,6 +46,16 @@
             }
         },
         {
+            "name": "linux-x64-asan",
+            "displayName": "Linux x86-64, Debug with ASan and UBSan",
+            "inherits": "linux-x64",
+            "binaryDir": "${sourceDir}/port/build/pc-asan",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CT_SANITIZE": "address,undefined"
+            }
+        },
+        {
             "name": "macos",
             "hidden": true,
             "inherits": "pc",
@@ -92,6 +102,10 @@
             "configurePreset": "linux-x64-release"
         },
         {
+            "name": "linux-x64-asan",
+            "configurePreset": "linux-x64-asan"
+        },
+        {
             "name": "macos-arm64",
             "configurePreset": "macos-arm64"
         },
@@ -120,6 +134,11 @@
             "name": "linux-x64-release",
             "inherits": "test",
             "configurePreset": "linux-x64-release"
+        },
+        {
+            "name": "linux-x64-asan",
+            "inherits": "test",
+            "configurePreset": "linux-x64-asan"
         },
         {
             "name": "macos-arm64",
