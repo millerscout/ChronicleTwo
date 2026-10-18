@@ -1431,7 +1431,7 @@ int _RELEASE_OBJ(RS_STACKDATA *stack, int argc) {
         action_info.chara->RemoveThrowItem();
     }
 
-    int chara_no = MONSTER_ACTIVE_MAX;
+    int chara_no = MONSTER_CHARA_BASE;
 
     if (action_info.chara->hold_type == ACTION_HOLD_ENEMY) {
         do {
@@ -1486,7 +1486,7 @@ int _RELEASE_OBJ(RS_STACKDATA *stack, int argc) {
             }
 
             chara_no++;
-        } while (chara_no <= MONSTER_ACTIVE_MAX * 2 - 1);
+        } while (chara_no <= MONSTER_CHARA_END - 1);
     }
 
     if (action_info.chara->hold_type == ACTION_HOLD_STONE) {

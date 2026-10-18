@@ -1185,8 +1185,8 @@ int RockOn_TargetSel(CScene *scene, int index) {
         for (tries = 0; tries < MONSTER_ACTIVE_MAX; tries++) {
             index += 1;
 
-            if (index >= MONSTER_ACTIVE_MAX * 2) {
-                index = MONSTER_ACTIVE_MAX;
+            if (index >= MONSTER_CHARA_END) {
+                index = MONSTER_CHARA_BASE;
             }
 
             target = static_cast<CActiveMonster *>(scene->GetCharacter(index));
@@ -1202,12 +1202,12 @@ int RockOn_TargetSel(CScene *scene, int index) {
     }
 
     for (tries = 0; tries < MONSTER_ACTIVE_MAX; tries++) {
-        target = static_cast<CActiveMonster *>(scene->GetCharacter(tries + MONSTER_ACTIVE_MAX));
+        target = static_cast<CActiveMonster *>(scene->GetCharacter(MONSTER_CHARA_INDEX(tries)));
 
         if (target != NULL && target->chara_kind == ACTION_KIND_SCRIPT && target->state == ACTIVE_MONSTER_LIVE &&
             target->catch_state != ACTION_CATCH_HELD &&
             !(target->attrib & MONSTER_ATTRIB_NO_LOCK_ON)) {
-            return tries + MONSTER_ACTIVE_MAX;
+            return MONSTER_CHARA_INDEX(tries);
         }
     }
 
@@ -1252,7 +1252,7 @@ int DistCheck_Action2(CScene *scene, float unused, float range, float *out_dist,
     i = 0;
 
     do {
-        target = static_cast<CActiveMonster *>(scene->GetCharacter(i + MONSTER_ACTIVE_MAX));
+        target = static_cast<CActiveMonster *>(scene->GetCharacter(MONSTER_CHARA_INDEX(i)));
 
         if (target != NULL && target->chara_kind == ACTION_KIND_SCRIPT && target->state == ACTIVE_MONSTER_LIVE &&
             target->catch_state != ACTION_CATCH_HELD &&
@@ -1286,7 +1286,7 @@ int DistCheck_Action2(CScene *scene, float unused, float range, float *out_dist,
         }
 
         *out_dist = best_dist;
-        return best + MONSTER_ACTIVE_MAX;
+        return MONSTER_CHARA_INDEX(best);
     }
 
     for (sorted = 0; sorted < count; sorted++) {
@@ -1322,7 +1322,7 @@ int DistCheck_Action2(CScene *scene, float unused, float range, float *out_dist,
         *out_rank = rank;
     }
 
-    return ids[rank] + MONSTER_ACTIVE_MAX;
+    return MONSTER_CHARA_INDEX(ids[rank]);
 }
 
 /**
@@ -1395,7 +1395,7 @@ void CActionChara::CollisionCheck(float *pos, float *velocity, float *out_veloci
     sceVu0CopyVector(flat_position, next_position);
     flat_position[1] = 0.0f;
 
-    for (index = MONSTER_ACTIVE_MAX; index < MONSTER_ACTIVE_MAX * 2; index++) {
+    for (index = MONSTER_CHARA_BASE; index < MONSTER_CHARA_END; index++) {
         CActiveMonster *monster = static_cast<CActiveMonster *>(nowScene__2->GetCharacter(index));
 
         if (monster == NULL || monster->chara_kind != ACTION_KIND_SCRIPT ||
@@ -1484,13 +1484,13 @@ void CActionChara::RockOn() {
 
             if (scene_input->lock_on_mode == DNG_LOCK_ON_SELECT) {
                 if (target_no < 0) {
-                    target_no = MONSTER_ACTIVE_MAX;
+                    target_no = MONSTER_CHARA_BASE;
                 } else {
                     target_no = target_no + 1;
                 }
 
-                if (target_no >= MONSTER_ACTIVE_MAX * 2) {
-                    target_no = MONSTER_ACTIVE_MAX;
+                if (target_no >= MONSTER_CHARA_END) {
+                    target_no = MONSTER_CHARA_BASE;
                 }
 
                 target_no = RockOn_TargetSel(nowScene__2, target_no);
@@ -1507,7 +1507,7 @@ void CActionChara::RockOn() {
                     return;
                 }
 
-                target_no = MONSTER_ACTIVE_MAX;
+                target_no = MONSTER_CHARA_BASE;
             }
         } else if (target_no != -1) {
             sndSePlay(SystemSND_ID, SYSTEM_SE_LOCK_ON, 0);
@@ -3693,7 +3693,7 @@ void CActionChara::Step() {
         gun->GetWorldPosition0(gun_pos);
 
         if (lock_on != 0 && dir_gun != 0) {
-            monster_index = target_no - MONSTER_ACTIVE_MAX;
+            monster_index = target_no - MONSTER_CHARA_BASE;
             ActiveMonster->active[monster_index]->GetEntryObjectPos(0, target_pos);
             sceVu0SubVector(gun_pos, target_pos, gun_pos);
             sceVu0CopyVector(target_pos, gun_pos);
