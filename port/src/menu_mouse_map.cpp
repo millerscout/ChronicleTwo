@@ -10,7 +10,7 @@
 #include "menucommon.hpp"
 #include "menumain.hpp"
 #include "menumap.hpp"
-#include "snd_mngr.hpp"
+#include "stubs/menumap.hpp"
 
 std::vector<MenuMouseRect> MenuMouseWorldMapRows(std::span<const WMAP_AREA_DATA> areas, const MenuMouseRect &name) {
     std::vector<MenuMouseRect> rows(areas.size() + 1);
@@ -54,7 +54,7 @@ bool MenuMouseWorldMap() {
     MenuMouseLanguageClicks();
     if (picked > 0 && picked < count && picked != map->area_no) {
         map->area_no = picked;
-        MenuSePlay(SYSTEM_SE_CURSOR);
+        MenuMouseCursorSound();
     }
     return true;
 }
